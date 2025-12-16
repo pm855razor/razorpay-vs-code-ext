@@ -11,6 +11,7 @@ import { EventsWebviewProvider } from './webviews/eventsWebview';
 import { SDKIntegrationWebviewProvider } from './webviews/sdkIntegrationWebview';
 import { RazorpayService } from './services/razorpayService';
 import { SDKInstaller } from './utils/sdkInstaller';
+import { RazorpayHoverProvider } from './providers/razorpayHoverProvider';
 
 let logger: Logger;
 let snippetGenerator: SnippetGenerator;
@@ -79,6 +80,25 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     snippetsWebview = new SnippetsWebviewProvider(context, logger, snippetGenerator);
     eventsWebview = new EventsWebviewProvider(context, logger, razorpayService);
     sdkIntegrationWebview = new SDKIntegrationWebviewProvider(context, logger, sdkInstaller);
+
+    // Register hover provider for API documentation
+    const hoverProvider = new RazorpayHoverProvider();
+    const supportedLanguages = [
+      'javascript',
+      'typescript',
+      'javascriptreact',
+      'typescriptreact',
+      'python',
+      'java',
+      'go',
+      'ruby',
+    ];
+    
+    supportedLanguages.forEach(language => {
+      context.subscriptions.push(
+        vscode.languages.registerHoverProvider(language, hoverProvider)
+      );
+    });
 
     // Register commands
     registerCommands(context);
