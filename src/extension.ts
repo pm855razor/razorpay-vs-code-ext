@@ -1,27 +1,80 @@
 import * as vscode from 'vscode';
 import { Logger } from './utils/logger';
 import { SnippetGenerator } from './snippets/snippetGenerator';
-import { SnippetTreeProvider } from './views/snippetTreeProvider';
+import { RazorpayTreeViewProvider } from './views/treeViewProvider.ts';
+import { AssistantWebviewProvider } from './webviews/assistantWebview';
+import { SnippetsWebviewProvider } from './webviews/snippetsWebview';
+import { EventsWebviewProvider } from './webviews/eventsWebview';
+import { RazorpayService } from './services/razorpayService';
 
 let logger: Logger;
 let snippetGenerator: SnippetGenerator;
-let snippetTreeProvider: SnippetTreeProvider;
+let razorpayService: RazorpayService;
+let treeViewProvider: RazorpayTreeViewProvider;
+let assistantWebview: AssistantWebviewProvider;
+let snippetsWebview: SnippetsWebviewProvider;
+let eventsWebview: EventsWebviewProvider;
 
+/**
+ * Extension activation function.
+ * Called when VS Code activates the extension.
+ */
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   try {
     logger = new Logger('Razorpay');
     logger.info('Razorpay extension is now active!');
 
+    // Initialize services
     snippetGenerator = new SnippetGenerator(logger);
-    snippetTreeProvider = new SnippetTreeProvider(snippetGenerator);
+    razorpayService = new RazorpayService(logger);
 
-    // Register sidebar tree view
-    vscode.window.createTreeView('razorpaySnippets', {
-      treeDataProvider: snippetTreeProvider,
-      showCollapseAll: true,
+    // Initialize Razorpay service if credentials are configured
+    const config = vscode.workspace.getConfiguration('razorpay');
+    const keyId = config.get<string>('keyId', '');
+    const keySecret = config.get<string>('keySecret', '');
+    
+    if (keyId && keySecret) {
+      try {
+        razorpayService.initialize({ keyId, keySecret });
+        logger.info('Razorpay service initialized with configured credentials');
+      } catch (error) {
+        logger.warn('Failed to initialize Razorpay service. Please check your credentials in settings.');
+      }
+    }
+
+    // Initialize tree view provider
+    treeViewProvider = new RazorpayTreeViewProvider();
+    vscode.window.createTreeView('razorpaySidebar', {
+      treeDataProvider: treeViewProvider,
     });
 
+    // Initialize webview providers
+    assistantWebview = new AssistantWebviewProvider(context, logger);
+    snippetsWebview = new SnippetsWebviewProvider(context, logger, snippetGenerator);
+    eventsWebview = new EventsWebviewProvider(context, logger, razorpayService);
+
+    // Register commands
     registerCommands(context);
+
+    // Listen for configuration changes
+    context.subscriptions.push(
+      vscode.workspace.onDidChangeConfiguration((e) => {
+        if (e.affectsConfiguration('razorpay.keyId') || e.affectsConfiguration('razorpay.keySecret')) {
+          const newConfig = vscode.workspace.getConfiguration('razorpay');
+          const newKeyId = newConfig.get<string>('keyId', '');
+          const newKeySecret = newConfig.get<string>('keySecret', '');
+          
+          if (newKeyId && newKeySecret) {
+            try {
+              razorpayService.initialize({ keyId: newKeyId, keySecret: newKeySecret });
+              logger.info('Razorpay service reinitialized with new credentials');
+            } catch (error) {
+              logger.error('Failed to reinitialize Razorpay service', error as Error);
+            }
+          }
+        }
+      }),
+    );
 
     logger.info('Razorpay extension initialized successfully');
   } catch (error) {
@@ -38,6 +91,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 }
 
 function registerCommands(context: vscode.ExtensionContext): void {
+  const openAssistantCommand = vscode.commands.registerCommand('razorpay.openAssistant', () => {
+    assistantWebview.show();
+  });
+  context.subscriptions.push(openAssistantCommand);
+
+  const openSnippetsCommand = vscode.commands.registerCommand('razorpay.openSnippets', () => {
+    snippetsWebview.show();
+  });
+  context.subscriptions.push(openSnippetsCommand);
+
+  const openEventsCommand = vscode.commands.registerCommand('razorpay.openEvents', (section?: string) => {
+    eventsWebview.show(section);
+  });
+  context.subscriptions.push(openEventsCommand);
+
   const insertSnippetCommand = vscode.commands.registerCommand('razorpay.insertSnippet', async (snippetPattern: string) => {
     await handleInsertSnippet(snippetPattern);
   });
@@ -52,11 +120,6 @@ function registerCommands(context: vscode.ExtensionContext): void {
     await handleSnippetList();
   });
   context.subscriptions.push(snippetListCommand);
-
-  const refreshCommand = vscode.commands.registerCommand('razorpay.refreshSnippets', () => {
-    snippetTreeProvider.refresh();
-  });
-  context.subscriptions.push(refreshCommand);
 }
 
 async function handleInsertSnippet(snippetPattern: string): Promise<void> {
