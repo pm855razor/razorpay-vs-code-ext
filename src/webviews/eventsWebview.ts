@@ -22,7 +22,7 @@ export class EventsWebviewProvider {
 
     const panel = vscode.window.createWebviewPanel(
       'razorpayEvents',
-      section === 'order' ? 'Create Order' : section === 'payment' ? 'Create Payment Link' : 'Razorpay Trigger Events',
+      section === 'order' ? 'Create Order' : section === 'payment' ? 'Create Payment Link' : section === 'refund' ? 'Create Refund' : 'Razorpay Trigger Events',
       vscode.ViewColumn.One,
       {
         enableScripts: true,
@@ -40,6 +40,9 @@ export class EventsWebviewProvider {
             break;
           case 'createPayment':
             await this.handleCreatePayment(panel.webview, message.data);
+            break;
+          case 'createRefund':
+            await this.handleCreateRefund(panel.webview, message.data);
             break;
           case 'checkConfig':
             this.handleCheckConfig(panel.webview);
@@ -206,12 +209,83 @@ export class EventsWebviewProvider {
     }
   }
 
+  private async handleCreateRefund(webview: vscode.Webview, data: any): Promise<void> {
+    try {
+      if (!this.razorpayService.isInitialized()) {
+        const config = vscode.workspace.getConfiguration('razorpay');
+        const keyId = config.get<string>('keyId', '');
+        const keySecret = config.get<string>('keySecret', '');
+
+        if (!keyId || !keySecret) {
+          webview.postMessage({
+            command: 'refundResult',
+            success: false,
+            error: 'Razorpay credentials not configured. Please set razorpay.keyId and razorpay.keySecret in VS Code settings.',
+          });
+          return;
+        }
+
+        this.razorpayService.initialize({ keyId, keySecret });
+      }
+
+      const refund = await this.razorpayService.createRefund({
+        payment_id: data.payment_id,
+        amount: data.amount ? parseFloat(data.amount) : undefined,
+        speed: data.speed || 'normal',
+        notes: data.notes || undefined,
+        receipt: data.receipt || undefined,
+      });
+
+      webview.postMessage({
+        command: 'refundResult',
+        success: true,
+        refund: {
+          id: refund.id,
+          amount: refund.amount,
+          currency: refund.currency,
+          payment_id: refund.payment_id,
+          status: refund.status,
+          speed_processed: refund.speed_processed,
+          speed_requested: refund.speed_requested,
+          notes: refund.notes,
+          receipt: refund.receipt,
+          created_at: refund.created_at,
+        },
+      });
+
+      // Copy refund ID to clipboard
+      await vscode.env.clipboard.writeText(refund.id);
+      vscode.window.showInformationMessage(`Refund created! Refund ID: ${refund.id} (copied to clipboard)`);
+    } catch (error: any) {
+      let errorMessage = 'Unknown error occurred';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (error?.error?.description) {
+        errorMessage = error.error.description;
+      } else if (error?.message) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      
+      this.logger.error(`Failed to create refund: ${errorMessage}`, error as Error);
+
+      webview.postMessage({
+        command: 'refundResult',
+        success: false,
+        error: errorMessage,
+      });
+    }
+  }
+
   private getWebviewContent(_webview: vscode.Webview, section?: string): string {
     // If a specific section is selected, show only that functionality
     if (section === 'order') {
       return this.getOrderContent();
     } else if (section === 'payment') {
       return this.getPaymentContent();
+    } else if (section === 'refund') {
+      return this.getRefundContent();
     }
     // Otherwise show the full tree view
     return this.getFullContent();
@@ -288,8 +362,48 @@ export class EventsWebviewProvider {
     return this.getBaseHTML('Create Payment Link', 'Create a payment link for checkout. Use this link to complete payment and get the payment_id.', paymentForm, 'payment');
   }
 
-  private getBaseHTML(title: string, description: string, content: string, formType: 'order' | 'payment'): string {
-    const scriptContent = formType === 'order' ? this.getOrderScript() : this.getPaymentScript();
+  private getRefundContent(): string {
+    const refundForm = '<form id="refundForm">' +
+      '<div class="form-group">' +
+        '<label for="paymentId">Payment ID *</label>' +
+        '<div style="display: flex; align-items: center; gap: 5px;">' +
+          '<span style="padding: 10px; background-color: var(--vscode-textCodeBlock-background); border: 1px solid var(--vscode-input-border); border-radius: 4px 0 0 4px; color: var(--vscode-descriptionForeground);">pay_</span>' +
+          '<input type="text" id="paymentId" name="paymentId" required placeholder="29QQoUBi66xm2f" style="flex: 1; border-radius: 0 4px 4px 0; border-left: none;" />' +
+        '</div>' +
+        '<div class="info-text">Enter only the payment ID (the pay_ prefix is added automatically)</div>' +
+      '</div>' +
+      '<div class="form-group">' +
+        '<label for="refundAmount">Amount (Optional)</label>' +
+        '<input type="number" id="refundAmount" name="refundAmount" step="0.01" min="0.01" placeholder="100.00" />' +
+        '<div class="info-text">Amount to refund in your currency. Leave empty for full refund (e.g., 100.00 for ₹100)</div>' +
+      '</div>' +
+      '<div class="form-group">' +
+        '<label for="refundSpeed">Refund Speed</label>' +
+        '<select id="refundSpeed" name="refundSpeed">' +
+          '<option value="normal" selected>Normal (5-7 working days)</option>' +
+          '<option value="instant">Instant</option>' +
+        '</select>' +
+        '<div class="info-text">Speed at which the refund is to be processed</div>' +
+      '</div>' +
+      '<div class="form-group">' +
+        '<label for="refundReceipt">Receipt ID (Optional)</label>' +
+        '<input type="text" id="refundReceipt" name="refundReceipt" placeholder="receipt_refund_001" />' +
+        '<div class="info-text">Unique receipt identifier for your records</div>' +
+      '</div>' +
+      '<div class="form-group">' +
+        '<label for="refundNotes">Notes (Optional)</label>' +
+        '<textarea id="refundNotes" name="refundNotes" placeholder=\'{"reason": "Customer request", "key2": "value2"}\'></textarea>' +
+        '<div class="info-text">JSON object with additional notes (optional)</div>' +
+      '</div>' +
+      '<button type="submit" id="createRefundButton">Create Refund</button>' +
+    '</form>' +
+    '<div id="refundResult"></div>';
+    
+    return this.getBaseHTML('Create Refund', 'Create a refund for a payment. Provide the payment_id and optionally specify the amount (leave empty for full refund).', refundForm, 'refund');
+  }
+
+  private getBaseHTML(title: string, description: string, content: string, formType: 'order' | 'payment' | 'refund'): string {
+    const scriptContent = formType === 'order' ? this.getOrderScript() : formType === 'payment' ? this.getPaymentScript() : this.getRefundScript();
     
     return `<!DOCTYPE html>
 <html lang="en">
@@ -636,6 +750,125 @@ export class EventsWebviewProvider {
                     showPaymentResult(true, message.payment);
                 } else {
                     showPaymentResult(false, message.error);
+                }
+            }
+        });
+
+        vscode.postMessage({
+            command: 'checkConfig'
+        });
+    `;
+  }
+
+  private getRefundScript(): string {
+    return `
+        const vscode = acquireVsCodeApi();
+        const refundForm = document.getElementById('refundForm');
+        const refundResultDiv = document.getElementById('refundResult');
+        const configWarning = document.getElementById('configWarning');
+        const createRefundButton = document.getElementById('createRefundButton');
+
+        refundForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            let paymentId = document.getElementById('paymentId').value.trim();
+            const refundAmount = document.getElementById('refundAmount').value;
+            const refundSpeed = document.getElementById('refundSpeed').value;
+            const refundReceipt = document.getElementById('refundReceipt').value;
+            const refundNotesText = document.getElementById('refundNotes').value;
+
+            // Automatically add pay_ prefix if not already present
+            if (paymentId && !paymentId.startsWith('pay_')) {
+                paymentId = 'pay_' + paymentId;
+            }
+
+            if (!paymentId || paymentId === 'pay_') {
+                showRefundResult(false, 'Please enter a valid payment ID');
+                return;
+            }
+
+            let refundNotes = null;
+            if (refundNotesText.trim()) {
+                try {
+                    refundNotes = JSON.parse(refundNotesText);
+                } catch (err) {
+                    showRefundResult(false, 'Invalid JSON in notes field');
+                    return;
+                }
+            }
+
+            createRefundButton.disabled = true;
+            createRefundButton.textContent = 'Creating Refund...';
+
+            vscode.postMessage({
+                command: 'createRefund',
+                data: {
+                    payment_id: paymentId,
+                    amount: refundAmount || undefined,
+                    speed: refundSpeed,
+                    receipt: refundReceipt || undefined,
+                    notes: refundNotes || undefined,
+                }
+            });
+        });
+
+        function showRefundResult(success, data) {
+            createRefundButton.disabled = false;
+            createRefundButton.textContent = 'Create Refund';
+
+            if (success) {
+                const createdDate = new Date(data.created_at * 1000).toLocaleString();
+                refundResultDiv.innerHTML = 
+                    '<div class="result success">' +
+                        '<h3>Refund Created Successfully!</h3>' +
+                        '<p><strong>Refund ID:</strong></p>' +
+                        '<div class="order-id" id="refundId">' + data.id + '</div>' +
+                        '<button class="copy-button" onclick="copyRefundId(\\'' + data.id + '\\')">Copy Refund ID</button>' +
+                        '<p style="margin-top: 15px;"><strong>Details:</strong></p>' +
+                        '<ul style="margin-top: 10px;">' +
+                            '<li>Amount: ' + (data.amount / 100) + ' ' + data.currency + '</li>' +
+                            '<li>Status: ' + data.status + '</li>' +
+                            '<li>Payment ID: ' + data.payment_id + '</li>' +
+                            '<li>Speed: ' + (data.speed_processed || data.speed_requested || 'normal') + '</li>' +
+                            '<li>Receipt: ' + (data.receipt || 'N/A') + '</li>' +
+                            '<li>Created: ' + createdDate + '</li>' +
+                        '</ul>' +
+                        '<p style="margin-top: 15px; font-size: 13px;">' +
+                             'Refund has been initiated. The customer will receive the refund within ' +
+                             (data.speed_processed === 'instant' ? 'a few minutes' : '5-7 working days') + '.' +
+                        '</p>' +
+                    '</div>';
+            } else {
+                refundResultDiv.innerHTML = 
+                    '<div class="result error">' +
+                        '<h3>Failed to Create Refund</h3>' +
+                        '<p>' + data + '</p>' +
+                    '</div>';
+            }
+        }
+
+        function copyRefundId(refundId) {
+            vscode.postMessage({
+                command: 'copyToClipboard',
+                text: refundId
+            });
+        }
+
+        window.addEventListener('message', event => {
+            const message = event.data;
+            if (message.command === 'configStatus') {
+                if (!message.configured || !message.initialized) {
+                    configWarning.style.display = 'block';
+                    createRefundButton.disabled = true;
+                } else {
+                    configWarning.style.display = 'none';
+                    createRefundButton.disabled = false;
+                }
+            } else if (message.command === 'refundResult') {
+                if (message.success) {
+                    showRefundResult(true, message.refund);
+                } else {
+                    showRefundResult(false, message.error);
                 }
             }
         });

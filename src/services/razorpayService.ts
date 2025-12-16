@@ -21,6 +21,14 @@ export interface CreatePaymentParams {
   notes?: Record<string, string>;
 }
 
+export interface CreateRefundParams {
+  payment_id: string;
+  amount?: number;
+  speed?: 'normal' | 'instant';
+  notes?: Record<string, string>;
+  receipt?: string;
+}
+
 export interface RazorpayConfig {
   keyId: string;
   keySecret: string;
@@ -160,6 +168,46 @@ export class RazorpayService {
     } catch (error: any) {
       const errorMessage = error?.error?.description || error?.message || error?.toString() || 'Unknown error occurred';
       this.logger.error(`Failed to create payment link: ${errorMessage}`, error as Error);
+      throw new Error(errorMessage);
+    }
+  }
+
+  /**
+   * Create a refund for a payment
+   */
+  async createRefund(params: CreateRefundParams): Promise<any> {
+    if (!this.razorpay) {
+      throw new Error('Razorpay client not initialized. Please configure your credentials in settings.');
+    }
+
+    try {
+      this.logger.info(`Creating refund for payment: ${params.payment_id}`);
+      
+      const refundParams: any = {};
+
+      if (params.amount) {
+        refundParams.amount = params.amount * 100; // Convert to paise
+      }
+
+      if (params.speed) {
+        refundParams.speed = params.speed;
+      }
+
+      if (params.notes) {
+        refundParams.notes = params.notes;
+      }
+
+      if (params.receipt) {
+        refundParams.receipt = params.receipt;
+      }
+
+      const refund = await this.razorpay.payments.refund(params.payment_id, refundParams);
+      this.logger.info(`Refund created successfully: ${refund.id}`);
+      
+      return refund;
+    } catch (error: any) {
+      const errorMessage = error?.error?.description || error?.message || error?.toString() || 'Unknown error occurred';
+      this.logger.error(`Failed to create refund: ${errorMessage}`, error as Error);
       throw new Error(errorMessage);
     }
   }

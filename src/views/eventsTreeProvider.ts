@@ -31,6 +31,13 @@ export class EventsTreeProvider implements vscode.TreeDataProvider<EventsTreeIte
           undefined,
           new vscode.ThemeIcon('credit-card')
         ),
+        new EventsTreeItem(
+          'Refunds',
+          'events-refunds',
+          vscode.TreeItemCollapsibleState.Expanded,
+          undefined,
+          new vscode.ThemeIcon('arrow-left')
+        ),
       ]);
     } else if (element.id === 'events-orders') {
       return Promise.resolve([
@@ -58,6 +65,20 @@ export class EventsTreeProvider implements vscode.TreeDataProvider<EventsTreeIte
             arguments: ['payment'],
           },
           new vscode.ThemeIcon('link')
+        ),
+      ]);
+    } else if (element.id === 'events-refunds') {
+      return Promise.resolve([
+        new EventsTreeItem(
+          'Create Refund',
+          'event-refund-create',
+          vscode.TreeItemCollapsibleState.None,
+          {
+            command: 'razorpay.openEvents',
+            title: 'Create Refund',
+            arguments: ['refund'],
+          },
+          new vscode.ThemeIcon('add')
         ),
       ]);
     }
