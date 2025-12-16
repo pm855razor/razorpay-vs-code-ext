@@ -1,19 +1,17 @@
 {
   "name": "razorpay-vscode-extension",
   "displayName": "Razorpay for VS Code",
-  "description": "Razorpay Code Snippets Extension",
+  "description": "Razorpay Extension",
   "version": "0.0.1",
   "publisher": "razorpay",
   "engines": {
     "vscode": "^1.80.0"
   },
   "categories": [
-    "Snippets"
+    "Other"
   ],
   "keywords": [
-    "razorpay",
-    "snippets",
-    "code snippets"
+    "razorpay"
   ],
   "activationEvents": [
     "onStartupFinished"
@@ -32,12 +30,28 @@
     "views": {
       "razorpay": [
         {
-          "id": "razorpaySnippets",
-          "name": "Code Snippets"
+          "id": "razorpaySidebar",
+          "name": "Razorpay",
+          "when": "true"
         }
       ]
     },
     "commands": [
+      {
+        "command": "razorpay.openAssistant",
+        "title": "Open Assistant",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "razorpay.openSnippets",
+        "title": "Code Snippets",
+        "icon": "$(code)"
+      },
+      {
+        "command": "razorpay.openEvents",
+        "title": "Trigger Events",
+        "icon": "$(play)"
+      },
       {
         "command": "razorpay.insertSnippet",
         "title": "Insert Snippet",
@@ -52,20 +66,41 @@
         "command": "razorpay.snippets.list",
         "title": "List Available Snippets",
         "category": "Razorpay"
-      },
-      {
-        "command": "razorpay.refreshSnippets",
-        "title": "Refresh Snippets",
-        "category": "Razorpay",
-        "icon": "$(refresh)"
       }
     ],
     "menus": {
       "view/title": [
         {
-          "command": "razorpay.refreshSnippets",
-          "when": "view == razorpaySnippets",
+          "command": "razorpay.openAssistant",
+          "when": "view == razorpaySidebar",
           "group": "navigation"
+        },
+        {
+          "command": "razorpay.openSnippets",
+          "when": "view == razorpaySidebar",
+          "group": "navigation"
+        },
+        {
+          "command": "razorpay.openEvents",
+          "when": "view == razorpaySidebar",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "razorpay.openAssistant",
+          "when": "view == razorpaySidebar && viewItem == assistant",
+          "group": "inline"
+        },
+        {
+          "command": "razorpay.openSnippets",
+          "when": "view == razorpaySidebar && viewItem == snippets",
+          "group": "inline"
+        },
+        {
+          "command": "razorpay.openEvents",
+          "when": "view == razorpaySidebar && viewItem == events",
+          "group": "inline"
         }
       ]
     },
@@ -76,6 +111,42 @@
           "type": "boolean",
           "default": true,
           "description": "Enable extension logging",
+          "scope": "application"
+        },
+        "razorpay.keyId": {
+          "type": "string",
+          "default": "",
+          "description": "Razorpay Key ID",
+          "scope": "application"
+        },
+        "razorpay.keySecret": {
+          "type": "string",
+          "default": "",
+          "description": "Razorpay Key Secret",
+          "scope": "application"
+        },
+        "razorpay.ai.openai.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "OpenAI API Key for AI Assistant",
+          "scope": "application"
+        },
+        "razorpay.ai.openai.model": {
+          "type": "string",
+          "default": "gpt-4o-mini",
+          "description": "OpenAI model to use",
+          "scope": "application"
+        },
+        "razorpay.ai.gemini.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Google Gemini API Key for AI Assistant",
+          "scope": "application"
+        },
+        "razorpay.ai.gemini.model": {
+          "type": "string",
+          "default": "gemini-1.5-flash",
+          "description": "Gemini model to use",
           "scope": "application"
         }
       }
@@ -106,5 +177,9 @@
     "vitest": "^1.0.0",
     "vscode-test": "^1.6.1"
   },
-  "dependencies": {}
+  "dependencies": {
+    "@langchain/google-genai": "^0.1.0",
+    "@langchain/openai": "^0.3.0",
+    "razorpay": "^2.9.2"
+  }
 }
