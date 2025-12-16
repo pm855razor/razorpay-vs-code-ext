@@ -16,6 +16,10 @@ export class RazorpayTreeViewProvider implements vscode.TreeDataProvider<TreeIte
           command: 'razorpay.openAssistant',
           title: 'Open Assistant',
         }, new vscode.ThemeIcon('comment-discussion')),
+        new TreeItem('SDK Integration', 'sdk-integration', vscode.TreeItemCollapsibleState.None, {
+          command: 'razorpay.openSDKIntegration',
+          title: 'Open SDK Integration',
+        }, new vscode.ThemeIcon('plug')),
         new TreeItem('Code Snippets', 'snippets-parent', vscode.TreeItemCollapsibleState.Expanded, undefined, new vscode.ThemeIcon('code')),
         new TreeItem('Trigger Events', 'events-parent', vscode.TreeItemCollapsibleState.Expanded, undefined, new vscode.ThemeIcon('play')),
       ]);

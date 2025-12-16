@@ -43,6 +43,11 @@
           "id": "razorpayEvents",
           "name": "Trigger Events",
           "when": "true"
+        },
+        {
+          "id": "razorpaySDKIntegration",
+          "name": "SDK Integration",
+          "when": "true"
         }
       ]
     },
@@ -61,6 +66,11 @@
         "command": "razorpay.openEvents",
         "title": "Trigger Events",
         "icon": "$(play)"
+      },
+      {
+        "command": "razorpay.openSDKIntegration",
+        "title": "SDK Integration",
+        "icon": "$(plug)"
       },
       {
         "command": "razorpay.insertSnippet",

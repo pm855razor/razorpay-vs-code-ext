@@ -4,10 +4,13 @@ import { SnippetGenerator } from './snippets/snippetGenerator';
 import { AssistantTreeProvider } from './views/assistantTreeProvider';
 import { SnippetsTreeProvider } from './views/snippetsTreeProvider';
 import { EventsTreeProvider } from './views/eventsTreeProvider';
+import { SDKIntegrationTreeProvider } from './views/sdkIntegrationTreeProvider';
 import { AssistantWebviewProvider } from './webviews/assistantWebview';
 import { SnippetsWebviewProvider } from './webviews/snippetsWebview';
 import { EventsWebviewProvider } from './webviews/eventsWebview';
+import { SDKIntegrationWebviewProvider } from './webviews/sdkIntegrationWebview';
 import { RazorpayService } from './services/razorpayService';
+import { SDKInstaller } from './utils/sdkInstaller';
 
 let logger: Logger;
 let snippetGenerator: SnippetGenerator;
@@ -15,9 +18,12 @@ let razorpayService: RazorpayService;
 let assistantTreeProvider: AssistantTreeProvider;
 let snippetsTreeProvider: SnippetsTreeProvider;
 let eventsTreeProvider: EventsTreeProvider;
+let sdkIntegrationTreeProvider: SDKIntegrationTreeProvider;
 let assistantWebview: AssistantWebviewProvider;
 let snippetsWebview: SnippetsWebviewProvider;
 let eventsWebview: EventsWebviewProvider;
+let sdkIntegrationWebview: SDKIntegrationWebviewProvider;
+let sdkInstaller: SDKInstaller;
 
 /**
  * Extension activation function.
@@ -31,6 +37,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // Initialize services
     snippetGenerator = new SnippetGenerator(logger);
     razorpayService = new RazorpayService(logger);
+    sdkInstaller = new SDKInstaller(logger);
 
     // Initialize Razorpay service if credentials are configured
     const config = vscode.workspace.getConfiguration('razorpay');
@@ -46,10 +53,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
     }
 
-    // Initialize tree view providers for three separate panes
+    // Initialize tree view providers for separate panes
     assistantTreeProvider = new AssistantTreeProvider();
     snippetsTreeProvider = new SnippetsTreeProvider(snippetGenerator);
     eventsTreeProvider = new EventsTreeProvider();
+    sdkIntegrationTreeProvider = new SDKIntegrationTreeProvider();
 
     // Register tree views
     vscode.window.createTreeView('razorpayAssistant', {
@@ -62,11 +70,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.window.createTreeView('razorpayEvents', {
       treeDataProvider: eventsTreeProvider,
     });
+    vscode.window.createTreeView('razorpaySDKIntegration', {
+      treeDataProvider: sdkIntegrationTreeProvider,
+    });
 
     // Initialize webview providers
     assistantWebview = new AssistantWebviewProvider(context, logger);
     snippetsWebview = new SnippetsWebviewProvider(context, logger, snippetGenerator);
     eventsWebview = new EventsWebviewProvider(context, logger, razorpayService);
+    sdkIntegrationWebview = new SDKIntegrationWebviewProvider(context, logger, sdkInstaller);
 
     // Register commands
     registerCommands(context);
@@ -120,6 +132,11 @@ function registerCommands(context: vscode.ExtensionContext): void {
     eventsWebview.show(section);
   });
   context.subscriptions.push(openEventsCommand);
+
+  const openSDKIntegrationCommand = vscode.commands.registerCommand('razorpay.openSDKIntegration', () => {
+    sdkIntegrationWebview.show();
+  });
+  context.subscriptions.push(openSDKIntegrationCommand);
 
   const insertSnippetCommand = vscode.commands.registerCommand('razorpay.insertSnippet', async (snippetPattern: string) => {
     await handleInsertSnippet(snippetPattern);
