@@ -30,8 +30,18 @@
     "views": {
       "razorpay": [
         {
-          "id": "razorpaySidebar",
-          "name": "Razorpay",
+          "id": "razorpayAssistant",
+          "name": "Assistant",
+          "when": "true"
+        },
+        {
+          "id": "razorpaySnippets",
+          "name": "Code Snippets",
+          "when": "true"
+        },
+        {
+          "id": "razorpayEvents",
+          "name": "Trigger Events",
           "when": "true"
         }
       ]
@@ -72,35 +82,18 @@
       "view/title": [
         {
           "command": "razorpay.openAssistant",
-          "when": "view == razorpaySidebar",
+          "when": "view == razorpayAssistant",
           "group": "navigation"
         },
         {
           "command": "razorpay.openSnippets",
-          "when": "view == razorpaySidebar",
+          "when": "view == razorpaySnippets",
           "group": "navigation"
         },
         {
           "command": "razorpay.openEvents",
-          "when": "view == razorpaySidebar",
+          "when": "view == razorpayEvents",
           "group": "navigation"
-        }
-      ],
-      "view/item/context": [
-        {
-          "command": "razorpay.openAssistant",
-          "when": "view == razorpaySidebar && viewItem == assistant",
-          "group": "inline"
-        },
-        {
-          "command": "razorpay.openSnippets",
-          "when": "view == razorpaySidebar && viewItem == snippets",
-          "group": "inline"
-        },
-        {
-          "command": "razorpay.openEvents",
-          "when": "view == razorpaySidebar && viewItem == events",
-          "group": "inline"
         }
       ]
     },

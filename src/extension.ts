@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
 import { Logger } from './utils/logger';
 import { SnippetGenerator } from './snippets/snippetGenerator';
-import { RazorpayTreeViewProvider } from './views/treeViewProvider.ts';
+import { AssistantTreeProvider } from './views/assistantTreeProvider';
+import { SnippetsTreeProvider } from './views/snippetsTreeProvider';
+import { EventsTreeProvider } from './views/eventsTreeProvider';
 import { AssistantWebviewProvider } from './webviews/assistantWebview';
 import { SnippetsWebviewProvider } from './webviews/snippetsWebview';
 import { EventsWebviewProvider } from './webviews/eventsWebview';
@@ -10,7 +12,9 @@ import { RazorpayService } from './services/razorpayService';
 let logger: Logger;
 let snippetGenerator: SnippetGenerator;
 let razorpayService: RazorpayService;
-let treeViewProvider: RazorpayTreeViewProvider;
+let assistantTreeProvider: AssistantTreeProvider;
+let snippetsTreeProvider: SnippetsTreeProvider;
+let eventsTreeProvider: EventsTreeProvider;
 let assistantWebview: AssistantWebviewProvider;
 let snippetsWebview: SnippetsWebviewProvider;
 let eventsWebview: EventsWebviewProvider;
@@ -42,10 +46,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
     }
 
-    // Initialize tree view provider
-    treeViewProvider = new RazorpayTreeViewProvider();
-    vscode.window.createTreeView('razorpaySidebar', {
-      treeDataProvider: treeViewProvider,
+    // Initialize tree view providers for three separate panes
+    assistantTreeProvider = new AssistantTreeProvider();
+    snippetsTreeProvider = new SnippetsTreeProvider(snippetGenerator);
+    eventsTreeProvider = new EventsTreeProvider();
+
+    // Register tree views
+    vscode.window.createTreeView('razorpayAssistant', {
+      treeDataProvider: assistantTreeProvider,
+    });
+    vscode.window.createTreeView('razorpaySnippets', {
+      treeDataProvider: snippetsTreeProvider,
+      showCollapseAll: true,
+    });
+    vscode.window.createTreeView('razorpayEvents', {
+      treeDataProvider: eventsTreeProvider,
     });
 
     // Initialize webview providers
