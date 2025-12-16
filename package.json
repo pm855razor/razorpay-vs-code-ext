@@ -1,0 +1,186 @@
+{
+  "name": "razorpay-vscode-extension",
+  "displayName": "Razorpay for VS Code",
+  "description": "Razorpay Extension",
+  "version": "0.0.1",
+  "publisher": "razorpay",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "razorpay"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "razorpay",
+          "title": "Razorpay",
+          "icon": "resources/razorpay-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "razorpay": [
+        {
+          "id": "razorpaySidebar",
+          "name": "Razorpay",
+          "when": "true"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "razorpay.openAssistant",
+        "title": "Open Assistant",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "razorpay.openSnippets",
+        "title": "Code Snippets",
+        "icon": "$(code)"
+      },
+      {
+        "command": "razorpay.openEvents",
+        "title": "Trigger Events",
+        "icon": "$(play)"
+      },
+      {
+        "command": "razorpay.insertSnippet",
+        "title": "Insert Snippet",
+        "category": "Razorpay"
+      },
+      {
+        "command": "razorpay.snippets.generate",
+        "title": "Generate Code Snippet",
+        "category": "Razorpay"
+      },
+      {
+        "command": "razorpay.snippets.list",
+        "title": "List Available Snippets",
+        "category": "Razorpay"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "razorpay.openAssistant",
+          "when": "view == razorpaySidebar",
+          "group": "navigation"
+        },
+        {
+          "command": "razorpay.openSnippets",
+          "when": "view == razorpaySidebar",
+          "group": "navigation"
+        },
+        {
+          "command": "razorpay.openEvents",
+          "when": "view == razorpaySidebar",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "razorpay.openAssistant",
+          "when": "view == razorpaySidebar && viewItem == assistant",
+          "group": "inline"
+        },
+        {
+          "command": "razorpay.openSnippets",
+          "when": "view == razorpaySidebar && viewItem == snippets",
+          "group": "inline"
+        },
+        {
+          "command": "razorpay.openEvents",
+          "when": "view == razorpaySidebar && viewItem == events",
+          "group": "inline"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Razorpay",
+      "properties": {
+        "razorpay.enableLogging": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable extension logging",
+          "scope": "application"
+        },
+        "razorpay.keyId": {
+          "type": "string",
+          "default": "",
+          "description": "Razorpay Key ID",
+          "scope": "application"
+        },
+        "razorpay.keySecret": {
+          "type": "string",
+          "default": "",
+          "description": "Razorpay Key Secret",
+          "scope": "application"
+        },
+        "razorpay.ai.openai.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "OpenAI API Key for AI Assistant",
+          "scope": "application"
+        },
+        "razorpay.ai.openai.model": {
+          "type": "string",
+          "default": "gpt-4o-mini",
+          "description": "OpenAI model to use",
+          "scope": "application"
+        },
+        "razorpay.ai.gemini.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Google Gemini API Key for AI Assistant",
+          "scope": "application"
+        },
+        "razorpay.ai.gemini.model": {
+          "type": "string",
+          "default": "gemini-1.5-flash",
+          "description": "Gemini model to use",
+          "scope": "application"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:integration": "vitest run src/__tests__/integration",
+    "lint": "eslint src --ext ts",
+    "lint:fix": "eslint src --ext ts --fix",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\""
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/vscode": "^1.80.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "@vitest/coverage-v8": "^1.0.0",
+    "eslint": "^8.54.0",
+    "prettier": "^3.1.0",
+    "typescript": "^5.3.2",
+    "vitest": "^1.0.0",
+    "vscode-test": "^1.6.1"
+  },
+  "dependencies": {
+    "@langchain/google-genai": "^0.1.0",
+    "@langchain/openai": "^0.3.0",
+    "razorpay": "^2.9.2"
+  }
+}
+
