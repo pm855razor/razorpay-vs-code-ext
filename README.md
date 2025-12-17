@@ -20,3 +20,4 @@
    - This will compile the extension (if not already compiled)
    - A new VS Code window will open with "[Extension Development Host]" in the title bar
    - This is where you test the extension
+

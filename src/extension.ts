@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
 import { Logger } from './utils/logger';
 import { SnippetGenerator } from './snippets/snippetGenerator';
-import { AssistantTreeProvider } from './views/assistantTreeProvider';
 import { SnippetsTreeProvider } from './views/snippetsTreeProvider';
 import { EventsTreeProvider } from './views/eventsTreeProvider';
 import { SDKIntegrationTreeProvider } from './views/sdkIntegrationTreeProvider';
-import { AssistantWebviewProvider } from './webviews/assistantWebview';
+import { AssistantChatViewProvider } from './webviews/assistantChatViewProvider';
+import { MCPChatViewProvider } from './webviews/mcpChatViewProvider';
 import { SnippetsWebviewProvider } from './webviews/snippetsWebview';
 import { EventsWebviewProvider } from './webviews/eventsWebview';
 import { RazorpayService } from './services/razorpayService';
@@ -15,11 +15,9 @@ import { sdkSnippetTemplates } from './snippets/sdkTemplates';
 let logger: Logger;
 let snippetGenerator: SnippetGenerator;
 let razorpayService: RazorpayService;
-let assistantTreeProvider: AssistantTreeProvider;
 let snippetsTreeProvider: SnippetsTreeProvider;
 let eventsTreeProvider: EventsTreeProvider;
 let sdkIntegrationTreeProvider: SDKIntegrationTreeProvider;
-let assistantWebview: AssistantWebviewProvider;
 let snippetsWebview: SnippetsWebviewProvider;
 let eventsWebview: EventsWebviewProvider;
 
@@ -50,21 +48,34 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
     }
 
-    // Initialize tree view providers for separate panes
-    assistantTreeProvider = new AssistantTreeProvider();
+    // Initialize tree view providers
     snippetsTreeProvider = new SnippetsTreeProvider(snippetGenerator);
     eventsTreeProvider = new EventsTreeProvider();
     sdkIntegrationTreeProvider = new SDKIntegrationTreeProvider();
 
     // Initialize webview providers
-    assistantWebview = new AssistantWebviewProvider(context, logger);
     snippetsWebview = new SnippetsWebviewProvider(context, logger, snippetGenerator);
     eventsWebview = new EventsWebviewProvider(context, logger, razorpayService);
 
+    // Register sidebar chat view providers (opens in sidebar, not editor area)
+    const assistantChatProvider = new AssistantChatViewProvider(context.extensionUri, logger);
+    const mcpChatProvider = new MCPChatViewProvider(context.extensionUri, logger);
+
+    context.subscriptions.push(
+      vscode.window.registerWebviewViewProvider(
+        AssistantChatViewProvider.viewType,
+        assistantChatProvider
+      )
+    );
+    
+    context.subscriptions.push(
+      vscode.window.registerWebviewViewProvider(
+        MCPChatViewProvider.viewType,
+        mcpChatProvider
+      )
+    );
+
     // Register tree views
-    vscode.window.createTreeView('razorpayAssistant', {
-      treeDataProvider: assistantTreeProvider,
-    });
     vscode.window.createTreeView('razorpaySnippets', {
       treeDataProvider: snippetsTreeProvider,
       showCollapseAll: true,
@@ -133,8 +144,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 }
 
 function registerCommands(context: vscode.ExtensionContext): void {
-  const openAssistantCommand = vscode.commands.registerCommand('razorpay.openAssistant', (agent?: string) => {
-    assistantWebview.show(agent);
+  // Focus the AI Assistant sidebar panel
+  const openAssistantCommand = vscode.commands.registerCommand('razorpay.openAssistant', () => {
+    vscode.commands.executeCommand('razorpayAssistantChat.focus');
   });
   context.subscriptions.push(openAssistantCommand);
 
