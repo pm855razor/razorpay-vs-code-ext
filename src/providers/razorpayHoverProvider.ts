@@ -58,7 +58,7 @@ export class RazorpayHoverProvider implements vscode.HoverProvider {
     markdown.appendMarkdown(`**Method:** \`${apiDoc.method}\` | **Endpoint:** \`${apiDoc.endpoint}\`\n\n`);
     
     // Input Parameters
-    markdown.appendMarkdown(`#### 📥 Input Parameters\n\n`);
+    markdown.appendMarkdown(`####  Input Parameters\n\n`);
     
     const requiredParams = apiDoc.inputParameters.filter(p => p.required);
     const optionalParams = apiDoc.inputParameters.filter(p => !p.required);
@@ -89,7 +89,7 @@ export class RazorpayHoverProvider implements vscode.HoverProvider {
     
     // Output Fields
     if (apiDoc.outputFields && apiDoc.outputFields.length > 0) {
-      markdown.appendMarkdown(`#### 📤 Output Fields\n\n`);
+      markdown.appendMarkdown(`####  Output Fields\n\n`);
       apiDoc.outputFields.forEach(field => {
         markdown.appendMarkdown(`- ${field}\n`);
       });
@@ -99,13 +99,13 @@ export class RazorpayHoverProvider implements vscode.HoverProvider {
     // Examples
     if (apiDoc.examples) {
       if (apiDoc.examples.request) {
-        markdown.appendMarkdown(`#### 📝 Request Example\n\n`);
+        markdown.appendMarkdown(`####  Request Example\n\n`);
         markdown.appendCodeblock(apiDoc.examples.request, 'json');
         markdown.appendMarkdown(`\n`);
       }
       
       if (apiDoc.examples.response) {
-        markdown.appendMarkdown(`#### 📋 Response Example\n\n`);
+        markdown.appendMarkdown(`####  Response Example\n\n`);
         markdown.appendCodeblock(apiDoc.examples.response, 'json');
         markdown.appendMarkdown(`\n`);
       }
