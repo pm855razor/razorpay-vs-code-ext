@@ -187,7 +187,7 @@ export class AssistantWebviewProvider {
     const keySecret = config.get<string>('keySecret');
 
     if (!keyId || !keySecret) {
-      return `⚠️ **MCP Server requires Razorpay API credentials**
+      return ` **MCP Server requires Razorpay API credentials**
 
 Please configure your API keys in VS Code Settings → Razorpay:
 - \`razorpay.keyId\`: Your Razorpay Key ID
@@ -215,7 +215,7 @@ Learn more: https://razorpay.com/docs/mcp-server/remote/`;
           return toolRequest.message;
         }
         const missing = (toolRequest.params as { missing?: string }).missing || 'required parameters';
-        return `⚠️ **Missing Required Parameter**
+        return ` **Missing Required Parameter**
 
 To use \`${toolRequest.tool}\`, please provide: **${missing}**
 
@@ -368,7 +368,7 @@ Learn more: https://razorpay.com/docs/mcp-server/remote/`;
             missing: 'amount',
             orderId: orderIdMatch![0]
           },
-          message: `⚠️ **Please specify the amount**\n\nInclude the amount in your command:\n\n\`Generate payment for ${orderIdMatch![0]} for <amount> rupees\`\n\n💡 **Tip:** Use the same amount as your order!`
+          message: `**Please specify the amount**\n\nInclude the amount in your command:\n\n\`Generate payment for ${orderIdMatch![0]} for <amount> rupees\`\n\n💡 **Tip:** Use the same amount as your order!`
         };
       }
       
@@ -684,57 +684,57 @@ Learn more: https://razorpay.com/docs/mcp-server/remote/`;
   }
 
   private getStaticToolsList(): string {
-    return `## 🛠️ Available Razorpay MCP Tools
+    return `##  Available Razorpay MCP Tools
 
 The Razorpay MCP Server provides **32 tools** for direct API operations:
 
-### 📦 Orders (4 tools)
+### Orders (4 tools)
 - **create_order** - "Create order for 500"
 - **fetch_order** - "Fetch order order_XXXXX"
 - **fetch_all_orders** - "List orders"
 - **update_order** - "Update order order_XXXXX"
 
-### 💳 Payments (5 tools)
+### Payments (5 tools)
 - **fetch_payment** - "Fetch payment pay_XXXXX"
 - **fetch_all_payments** - "List payments"
 - **fetch_order_payments** - "Get payments for order_XXXXX"
 - **capture_payment** - "Capture payment pay_XXXXX" *(requires authorized payment)*
 - **initiate_payment** -  *Requires S2S API access*
 
-### 🔗 Payment Links (4 tools)
+###  Payment Links (4 tools)
 - **create_payment_link** - "Generate payment for order_XXX" or "Create payment link for 500"
 - **fetch_payment_link** - "Fetch link plink_XXXXX"
 - **fetch_all_payment_links** - "List payment links"
 - **update_payment_link** - Update link details
 
-### 📱 QR Codes (5 tools)
+###  QR Codes (5 tools)
 - **create_qr_code** - "Create QR code for 100"
 - **fetch_qr_code** - Fetch QR by ID
 - **fetch_all_qr_codes** - "List QR codes"
 - **fetch_qr_codes_by_customer_id** - QR by customer
 - **fetch_payments_for_qr_code** - Payments on QR
 
-### 💸 Refunds (4 tools)
+###  Refunds (4 tools)
 - **fetch_refund** - "Fetch refund rfnd_XXXXX"
 - **fetch_all_refunds** - "List refunds"
 - **fetch_multiple_refunds_for_payment** - Refunds for payment
 - **update_refund** - Update refund notes
 
-### 🏦 Settlements (4 tools)
+###  Settlements (4 tools)
 - **fetch_all_settlements** - "List settlements"
 - **fetch_settlement_with_id** - Fetch by ID
 - **fetch_all_instant_settlements** - Instant settlements
 - **fetch_settlement_recon_details** - Recon report
 
-### 💰 Payouts (2 tools)
+###  Payouts (2 tools)
 - **fetch_all_payouts** - "List payouts"
 - **fetch_payout_with_id** - Fetch by ID
 
-### 🔐 Tokens (2 tools)
+###  Tokens (2 tools)
 - **fetch_tokens** - Get saved payment methods
 - **revoke_token** - Revoke a token
 
-### 🔔 Notifications (2 tools)
+###  Notifications (2 tools)
 - **payment_link_notify** - Send link notification
 - **payment_link_upi_create** - Create UPI link
 
@@ -762,7 +762,7 @@ Learn more: https://razorpay.com/docs/mcp-server/`;
       });
 
       if (response.error) {
-        return `## ❌ Error\n\n**${response.error.message}**\n\nError code: ${response.error.code}`;
+        return `## Error\n\n**${response.error.message}**\n\nError code: ${response.error.code}`;
       }
 
       if (response.result?.content) {
@@ -775,15 +775,15 @@ Learn more: https://razorpay.com/docs/mcp-server/`;
         try {
           const parsed = JSON.parse(textContent);
           const formatted = this.formatMCPResult(parsed);
-          return `## ✅ ${toolName} Result\n\n${formatted}`;
+          return `## ${toolName} Result\n\n${formatted}`;
         } catch {
-          return `## ✅ ${toolName} Result\n\n${textContent}`;
+          return `##  ${toolName} Result\n\n${textContent}`;
         }
       }
 
       // Return raw result if no content array
       const formatted = this.formatMCPResult(response.result);
-      return `## ✅ ${toolName} Result\n\n${formatted}`;
+      return `##  ${toolName} Result\n\n${formatted}`;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       throw new Error(`Failed to execute ${toolName}: ${errorMessage}`);
@@ -805,10 +805,10 @@ Learn more: https://razorpay.com/docs/mcp-server/`;
       const amount = typeof data.amount === 'number' ? data.amount / 100 : 0;
       const currency = data.currency || 'INR';
       
-      let summary = `### 🔗 Payment Link Created!\n\n`;
+      let summary = `###  Payment Link Created!\n\n`;
       summary += `**Amount:** ₹${amount} ${currency}\n\n`;
       summary += `**Payment Link:**\n`;
-      summary += `### 👉 [Click here to pay](${data.short_url})\n\n`;
+      summary += `###  [Click here to pay](${data.short_url})\n\n`;
       summary += `\`${data.short_url}\`\n\n`;
       summary += `---\n`;
       summary += `**Link ID:** \`${data.id}\`\n`;
@@ -825,7 +825,7 @@ Learn more: https://razorpay.com/docs/mcp-server/`;
       const amountPaid = typeof data.amount_paid === 'number' ? data.amount_paid / 100 : 0;
       const currency = data.currency || 'INR';
       
-      let summary = `### ${data.entity === 'order' ? '📦 Order Created!' : '💳 Payment Details'}\n\n`;
+      let summary = `### ${data.entity === 'order' ? ' Order Created!' : ' Payment Details'}\n\n`;
       summary += `| Field | Value |\n|-------|-------|\n`;
       summary += `| ID | \`${data.id}\` |\n`;
       summary += `| Amount | **₹${amount}** |\n`;
@@ -841,7 +841,7 @@ Learn more: https://razorpay.com/docs/mcp-server/`;
       
       // Add helpful next step for orders
       if (data.entity === 'order') {
-        summary += `\n---\n💡 **Next Step:** Generate payment link:\n\`Generate payment for ${data.id} for ${amount} rupees\``;
+        summary += `\n---\n **Next Step:** Generate payment link:\n\`Generate payment for ${data.id} for ${amount} rupees\``;
       }
       
       return summary;
@@ -850,7 +850,7 @@ Learn more: https://razorpay.com/docs/mcp-server/`;
     // For collection results (list of items)
     if (data.entity === 'collection' && Array.isArray(data.items)) {
       const items = data.items as Array<Record<string, unknown>>;
-      let summary = `### 📋 Found ${data.count || items.length} items\n\n`;
+      let summary = `###  Found ${data.count || items.length} items\n\n`;
       
       if (items.length > 0) {
         summary += `| ID | Amount | Status | Created |\n|-----|--------|--------|----------|\n`;
@@ -879,6 +879,7 @@ Learn more: https://razorpay.com/docs/mcp-server/`;
   /**
    * Call Razorpay Smartron API (RAY) for intelligent documentation assistance
    * This API doesn't require any authentication
+   * Response format: text/event-stream with plain markdown text
    */
   private async callSmartronAPI(question: string): Promise<SmartronResponse> {
     const requestBody = JSON.stringify({
@@ -895,7 +896,7 @@ Learn more: https://razorpay.com/docs/mcp-server/`;
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json',
+          'Accept': 'text/event-stream',
           'Accept-Language': 'en-GB,en-US;q=0.9,en;q=0.8',
           'Cache-Control': 'no-cache',
           'Origin': 'https://razorpay.com',
@@ -906,19 +907,58 @@ Learn more: https://razorpay.com/docs/mcp-server/`;
       };
 
       const req = https.request(options, (res) => {
-        let data = '';
+        let rawData = '';
         
         res.on('data', (chunk) => {
-          data += chunk;
+          rawData += chunk.toString();
         });
 
         res.on('end', () => {
-          try {
-            const response = JSON.parse(data);
-            resolve(response);
-          } catch (error) {
-            this.logger.error('Failed to parse Smartron response', error as Error);
-            reject(new Error(`Invalid response from Smartron API: ${data.substring(0, 200)}`));
+          this.logger.info('Smartron API response length: ' + rawData.length);
+          
+          // The Smartron API returns text/event-stream with plain markdown text
+          // It's NOT JSON - just direct text streamed in chunks
+          let answer = rawData.trim();
+          
+          // If response contains SSE format "data:" lines, extract the text content
+          if (answer.includes('data:')) {
+            const lines = answer.split('\n');
+            const contentLines: string[] = [];
+            
+            for (const line of lines) {
+              const trimmedLine = line.trim();
+              if (trimmedLine.startsWith('data:')) {
+                const content = trimmedLine.substring(5).trim();
+                if (content && content !== '[DONE]') {
+                  // Try to parse as JSON first (some SSE sends JSON)
+                  try {
+                    const parsed = JSON.parse(content);
+                    const textContent = parsed.content || parsed.text || parsed.answer || 
+                                       parsed.response || parsed.delta?.content;
+                    if (textContent) {
+                      contentLines.push(textContent);
+                    }
+                  } catch {
+                    // Not JSON, use as plain text
+                    contentLines.push(content);
+                  }
+                }
+              } else if (trimmedLine && !trimmedLine.startsWith('event:') && !trimmedLine.startsWith(':')) {
+                // Regular text line (not SSE metadata)
+                contentLines.push(trimmedLine);
+              }
+            }
+            
+            if (contentLines.length > 0) {
+              answer = contentLines.join('\n');
+            }
+          }
+
+          if (answer.trim()) {
+            resolve({ answer: answer.trim() });
+          } else {
+            this.logger.error('Smartron API: Empty response received');
+            reject(new Error('No response content received from Smartron API'));
           }
         });
       });
@@ -927,7 +967,7 @@ Learn more: https://razorpay.com/docs/mcp-server/`;
         reject(new Error(`Smartron API connection failed: ${error.message}`));
       });
 
-      req.setTimeout(30000, () => {
+      req.setTimeout(60000, () => {
         req.destroy();
         reject(new Error('Smartron API request timed out'));
       });
@@ -942,14 +982,14 @@ Learn more: https://razorpay.com/docs/mcp-server/`;
    */
   private formatSmartronResponse(response: SmartronResponse): string {
     if (response.error) {
-      return `⚠️ **Error:** ${response.error}`;
+      return `**Error:** ${response.error}`;
     }
 
     let result = response.answer || 'No response received.';
 
     // Add sources if available
     if (response.sources && response.sources.length > 0) {
-      result += '\n\n---\n📚 **Sources:**\n';
+      result += '\n\n---\n **Sources:**\n';
       for (const source of response.sources) {
         if (source.url) {
           result += `- [${source.title || 'Razorpay Docs'}](${source.url})\n`;
@@ -1025,16 +1065,16 @@ Learn more: https://razorpay.com/docs/mcp-server/`;
         
         // Provide helpful error messages
         if (errorMessage.includes('404') || errorMessage.includes('not found')) {
-          return `⚠️ Model not found. Try changing the model in Settings → Razorpay → AI.\n\nAvailable models:\n- Gemini: gemini-2.0-flash, gemini-1.5-pro, gemini-pro\n- OpenAI: gpt-4o-mini, gpt-4o, gpt-3.5-turbo\n\n${this.getFallbackResponse(question)}`;
+          return ` Model not found. Try changing the model in Settings → Razorpay → AI.\n\nAvailable models:\n- Gemini: gemini-2.0-flash, gemini-1.5-pro, gemini-pro\n- OpenAI: gpt-4o-mini, gpt-4o, gpt-3.5-turbo\n\n${this.getFallbackResponse(question)}`;
         }
         if (errorMessage.includes('401') || errorMessage.includes('API key')) {
-          return `⚠️ Invalid API key. Please check your API key in Settings → Razorpay → AI.\n\n${this.getFallbackResponse(question)}`;
+          return ` Invalid API key. Please check your API key in Settings → Razorpay → AI.\n\n${this.getFallbackResponse(question)}`;
         }
         if (errorMessage.includes('429') || errorMessage.includes('rate limit')) {
-          return `⚠️ Rate limit exceeded. Please wait a moment and try again.\n\n${this.getFallbackResponse(question)}`;
+          return ` Rate limit exceeded. Please wait a moment and try again.\n\n${this.getFallbackResponse(question)}`;
         }
         
-        return `⚠️ AI Error: ${errorMessage}\n\n${this.getFallbackResponse(question)}`;
+        return ` AI Error: ${errorMessage}\n\n${this.getFallbackResponse(question)}`;
       }
     }
 
@@ -1069,9 +1109,7 @@ const rzp = new Razorpay(options);
 rzp.open();
 \`\`\`
 
-Would you like more specific help with any of these?
-
-💡 Tip: Set your AI API key in Settings → Razorpay for smarter responses!`;
+Would you like more specific help with any of these?`;
     }
 
     if (lowerQuestion.includes('order') || lowerQuestion.includes('create order')) {
@@ -1087,9 +1125,7 @@ const order = await razorpay.orders.create({
 });
 \`\`\`
 
-The order ID can then be used in the checkout flow.
-
-💡 Tip: Set your AI API key in Settings → Razorpay for smarter responses!`;
+The order ID can then be used in the checkout flow.`;
     }
 
     if (lowerQuestion.includes('webhook') || lowerQuestion.includes('event')) {
@@ -1099,9 +1135,7 @@ The order ID can then be used in the checkout flow.
 - **payment.failed**: Payment failed
 - **order.paid**: Order fully paid
 
-Set up webhooks in your Razorpay Dashboard under Settings → Webhooks.
-
-💡 Tip: Set your AI API key in Settings → Razorpay for smarter responses!`;
+Set up webhooks in your Razorpay Dashboard under Settings → Webhooks.`;
     }
 
     if (lowerQuestion.includes('refund') || lowerQuestion.includes('cancel')) {
@@ -1114,9 +1148,7 @@ const refund = await razorpay.payments.refund(paymentId, {
     reason: 'Customer request'
   }
 });
-\`\`\`
-
-💡 Tip: Set your AI API key in Settings → Razorpay for smarter responses!`;
+\`\`\``;
     }
 
     return `I'm the Razorpay assistant. I can help you with:
@@ -1126,8 +1158,6 @@ const refund = await razorpay.payments.refund(paymentId, {
 - Webhook setup and handling
 - Refunds and cancellations
 - API usage and code snippets
-
-💡 Tip: Set your AI API key in Settings → Razorpay → AI (OpenAI or Gemini) for smarter AI-powered responses!
 
 What specific Razorpay topic would you like help with?`;
   }
