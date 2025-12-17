@@ -1,17 +1,33 @@
 {
   "name": "razorpay-vscode-extension",
   "displayName": "Razorpay for VS Code",
-  "description": "Razorpay Extension",
+  "description": "Integrate Razorpay payment gateway into your projects with AI-powered assistance, code snippets, SDK integration, and webhook event handling.",
   "version": "0.0.1",
   "publisher": "razorpay",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pm855razor/razorpay-vs-code-ext"
+  },
+  "homepage": "https://github.com/pm855razor/razorpay-vs-code-ext#readme",
+  "bugs": {
+    "url": "https://github.com/pm855razor/razorpay-vs-code-ext/issues"
+  },
   "engines": {
     "vscode": "^1.80.0"
   },
   "categories": [
+    "Snippets",
     "Other"
   ],
   "keywords": [
-    "razorpay"
+    "razorpay",
+    "payment",
+    "gateway",
+    "india",
+    "payments",
+    "sdk",
+    "fintech"
   ],
   "activationEvents": [
     "onStartupFinished"

@@ -8,5 +8,11 @@ vsc-extension-quickstart.md
 **/*.map
 **/*.ts
 !out/**/*.js
-
-
+node_modules/**
+test-workspace/**
+.git/**
+*.vsix
+.eslintrc*
+.prettierrc*
+vitest.config.*
+coverage/**
