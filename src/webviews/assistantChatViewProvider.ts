@@ -2,11 +2,6 @@ import * as vscode from 'vscode';
 import * as https from 'https';
 import type { Logger } from '../utils/logger';
 
-interface SmartronHistoryItem {
-  question: string;
-  answer: string;
-}
-
 /**
  * Sidebar Chat View Provider for Razorpay AI Assistant
  * Opens in the sidebar panel (like Stripe) instead of editor area
@@ -16,7 +11,6 @@ export class AssistantChatViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'razorpayAssistantChat';
 
   private _view?: vscode.WebviewView;
-  private smartronHistory: SmartronHistoryItem[] = [];
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
@@ -43,9 +37,6 @@ export class AssistantChatViewProvider implements vscode.WebviewViewProvider {
         case 'askQuestion':
           await this.handleQuestion(message.text);
           break;
-        case 'clearHistory':
-          this.smartronHistory = [];
-          break;
       }
     });
   }
@@ -64,12 +55,6 @@ export class AssistantChatViewProvider implements vscode.WebviewViewProvider {
 
     try {
       const response = await this.callSmartronAPI(question);
-      
-      // Update history
-      this.smartronHistory.push({ question, answer: response });
-      if (this.smartronHistory.length > 10) {
-        this.smartronHistory = this.smartronHistory.slice(-10);
-      }
 
       this._view.webview.postMessage({
         command: 'response',
@@ -96,7 +81,7 @@ export class AssistantChatViewProvider implements vscode.WebviewViewProvider {
     const requestBody = JSON.stringify({
       question: question,
       products: ['docs'],
-      history: this.smartronHistory.slice(-5)
+      history: [] 
     });
 
     return new Promise((resolve, reject) => {

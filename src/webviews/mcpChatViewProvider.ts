@@ -485,12 +485,14 @@ Get keys from [Razorpay Dashboard](https://dashboard.razorpay.com)`;
     // Payment link
     if (data.id && String(data.id).startsWith('plink_') && data.short_url) {
       const amount = typeof data.amount === 'number' ? data.amount / 100 : 0;
-      return `**Payment Link Created**
+      return `**Payment Link Created!**
 
-Amount: Rs ${amount}
-Link: ${data.short_url}
-ID: \`${data.id}\`
-Status: ${data.status}`;
+**Amount:** Rs ${amount}
+**Link:** [${data.short_url}](${data.short_url})
+**ID:** \`${data.id}\`
+**Status:** ${data.status}
+
+Click the link above to open payment page.`;
     }
 
     // Order or payment
@@ -662,8 +664,18 @@ Status: **${data.status}**`;
             border-color: #7C3AED;
         }
         strong { color: var(--vscode-foreground); }
-        a { color: #A78BFA; text-decoration: none; }
-        a:hover { text-decoration: underline; }
+        a, a.link { 
+            color: #A78BFA; 
+            text-decoration: none;
+            background: rgba(124, 58, 237, 0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        a:hover, a.link:hover { 
+            text-decoration: underline;
+            background: rgba(124, 58, 237, 0.2);
+        }
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(124, 58, 237, 0.3); border-radius: 3px; }
@@ -733,11 +745,20 @@ Status: **${data.status}**`;
         }
 
         function format(text) {
-            return text
-                .replace(/\`\`\`(\\w+)?\\n([\\s\\S]*?)\`\`\`/g, '<pre>$2</pre>')
-                .replace(/\`([^\`]+)\`/g, '<code>$1</code>')
-                .replace(/\\*\\*([^*]+)\\*\\*/g, '<strong>$1</strong>')
-                .replace(/\\n/g, '<br>');
+            let formatted = text;
+            // Code blocks
+            formatted = formatted.replace(/\`\`\`(\\w+)?\\n([\\s\\S]*?)\`\`\`/g, '<pre>$2</pre>');
+            // Inline code
+            formatted = formatted.replace(/\`([^\`]+)\`/g, '<code>$1</code>');
+            // Bold
+            formatted = formatted.replace(/\\*\\*([^*]+)\\*\\*/g, '<strong>$1</strong>');
+            // Markdown links [text](url)
+            formatted = formatted.replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, '<a href="$2" target="_blank" class="link">$1</a>');
+            // Auto-detect URLs (not already in links)
+            formatted = formatted.replace(/(?<!href="|">)(https?:\\/\\/[^\\s<]+)/g, '<a href="$1" target="_blank" class="link">$1</a>');
+            // Line breaks
+            formatted = formatted.replace(/\\n/g, '<br>');
+            return formatted;
         }
 
         cmdInput.addEventListener('keypress', e => { if (e.key === 'Enter') send(); });
