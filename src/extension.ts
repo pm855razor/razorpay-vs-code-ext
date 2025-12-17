@@ -8,10 +8,9 @@ import { SDKIntegrationTreeProvider } from './views/sdkIntegrationTreeProvider';
 import { AssistantWebviewProvider } from './webviews/assistantWebview';
 import { SnippetsWebviewProvider } from './webviews/snippetsWebview';
 import { EventsWebviewProvider } from './webviews/eventsWebview';
-import { SDKIntegrationWebviewProvider } from './webviews/sdkIntegrationWebview';
 import { RazorpayService } from './services/razorpayService';
-import { SDKInstaller } from './utils/sdkInstaller';
 import { RazorpayHoverProvider } from './providers/razorpayHoverProvider';
+import { sdkSnippetTemplates } from './snippets/sdkTemplates';
 
 let logger: Logger;
 let snippetGenerator: SnippetGenerator;
@@ -23,8 +22,6 @@ let sdkIntegrationTreeProvider: SDKIntegrationTreeProvider;
 let assistantWebview: AssistantWebviewProvider;
 let snippetsWebview: SnippetsWebviewProvider;
 let eventsWebview: EventsWebviewProvider;
-let sdkIntegrationWebview: SDKIntegrationWebviewProvider;
-let sdkInstaller: SDKInstaller;
 
 /**
  * Extension activation function.
@@ -38,7 +35,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // Initialize services
     snippetGenerator = new SnippetGenerator(logger);
     razorpayService = new RazorpayService(logger);
-    sdkInstaller = new SDKInstaller(logger);
 
     // Initialize Razorpay service if credentials are configured
     const config = vscode.workspace.getConfiguration('razorpay');
@@ -79,7 +75,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     assistantWebview = new AssistantWebviewProvider(context, logger);
     snippetsWebview = new SnippetsWebviewProvider(context, logger, snippetGenerator);
     eventsWebview = new EventsWebviewProvider(context, logger, razorpayService);
-    sdkIntegrationWebview = new SDKIntegrationWebviewProvider(context, logger, sdkInstaller);
 
     // Register hover provider for API documentation
     const hoverProvider = new RazorpayHoverProvider();
@@ -153,15 +148,15 @@ function registerCommands(context: vscode.ExtensionContext): void {
   });
   context.subscriptions.push(openEventsCommand);
 
-  const openSDKIntegrationCommand = vscode.commands.registerCommand('razorpay.openSDKIntegration', () => {
-    sdkIntegrationWebview.show();
-  });
-  context.subscriptions.push(openSDKIntegrationCommand);
-
   const insertSnippetCommand = vscode.commands.registerCommand('razorpay.insertSnippet', async (snippetPattern: string) => {
     await handleInsertSnippet(snippetPattern);
   });
   context.subscriptions.push(insertSnippetCommand);
+
+  const insertSDKTemplateCommand = vscode.commands.registerCommand('razorpay.insertSDKTemplate', async (templateId: string) => {
+    await handleInsertSDKTemplate(templateId);
+  });
+  context.subscriptions.push(insertSDKTemplateCommand);
 
   const snippetGenerateCommand = vscode.commands.registerCommand('razorpay.snippets.generate', async () => {
     await handleSnippetGenerate();
@@ -176,10 +171,12 @@ function registerCommands(context: vscode.ExtensionContext): void {
 
 async function handleInsertSnippet(snippetPattern: string): Promise<void> {
   try {
-    const editor = vscode.window.activeTextEditor;
+    let editor = vscode.window.activeTextEditor;
+    
+    // If no file is open, create a new untitled file
     if (!editor) {
-      vscode.window.showWarningMessage('Please open a file first to insert the snippet.');
-      return;
+      const document = await vscode.workspace.openTextDocument({ content: '', language: 'typescript' });
+      editor = await vscode.window.showTextDocument(document);
     }
 
     await snippetGenerator.generateSnippet(snippetPattern, editor);
@@ -189,6 +186,112 @@ async function handleInsertSnippet(snippetPattern: string): Promise<void> {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     vscode.window.showErrorMessage(`Failed to insert snippet: ${errorMessage}`);
   }
+}
+
+async function handleInsertSDKTemplate(templateId: string): Promise<void> {
+  try {
+    const template = sdkSnippetTemplates.find(t => t.id === templateId);
+    
+    if (!template) {
+      vscode.window.showErrorMessage('SDK template not found.');
+      return;
+    }
+
+    let editor = vscode.window.activeTextEditor;
+    
+    // If no file is open, create a new file with appropriate extension
+    if (!editor) {
+      const fileInfo = getFileInfoForTemplate(templateId);
+      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+      
+      if (workspaceFolder) {
+        // Create file in workspace
+        const fileName = `razorpay-${fileInfo.name}${fileInfo.extension}`;
+        const fileUri = vscode.Uri.joinPath(workspaceFolder.uri, fileName);
+        
+        // Create the file with empty content
+        await vscode.workspace.fs.writeFile(fileUri, new Uint8Array());
+        
+        // Open the file
+        const document = await vscode.workspace.openTextDocument(fileUri);
+        editor = await vscode.window.showTextDocument(document);
+      } else {
+        // No workspace, create untitled document with proper language
+        const document = await vscode.workspace.openTextDocument({ 
+          content: '', 
+          language: fileInfo.language 
+        });
+        editor = await vscode.window.showTextDocument(document);
+      }
+    }
+
+    // Insert the code as a snippet at cursor position
+    const code = template.body.join('\n');
+    const snippet = new vscode.SnippetString(code);
+    const position = editor.selection.active;
+    await editor.insertSnippet(snippet, position);
+    
+    vscode.window.showInformationMessage(`${template.name} code inserted successfully!`);
+    logger.info(`SDK template ${templateId} inserted`);
+  } catch (error) {
+    logger.error('Failed to insert SDK template', error as Error);
+    vscode.window.showErrorMessage('Failed to insert SDK code. Check output channel for details.');
+  }
+}
+
+interface FileInfo {
+  name: string;
+  extension: string;
+  language: string;
+}
+
+function getFileInfoForTemplate(templateId: string): FileInfo {
+  if (templateId.includes('html')) {
+    return { name: 'checkout', extension: '.html', language: 'html' };
+  }
+  if (templateId.includes('react')) {
+    return { name: 'PaymentButton', extension: '.tsx', language: 'typescriptreact' };
+  }
+  if (templateId.includes('nextjs')) {
+    return { name: 'PaymentButton', extension: '.tsx', language: 'typescriptreact' };
+  }
+  if (templateId.includes('vue')) {
+    return { name: 'PaymentButton', extension: '.vue', language: 'vue' };
+  }
+  if (templateId.includes('angular')) {
+    return { name: 'payment.component', extension: '.ts', language: 'typescript' };
+  }
+  if (templateId.includes('reactnative')) {
+    return { name: 'PaymentScreen', extension: '.tsx', language: 'typescriptreact' };
+  }
+  if (templateId.includes('node')) {
+    return { name: 'razorpay-server', extension: '.ts', language: 'typescript' };
+  }
+  if (templateId.includes('python')) {
+    return { name: 'razorpay_server', extension: '.py', language: 'python' };
+  }
+  if (templateId.includes('java') && !templateId.includes('javascript')) {
+    return { name: 'RazorpayService', extension: '.java', language: 'java' };
+  }
+  if (templateId.includes('go')) {
+    return { name: 'razorpay', extension: '.go', language: 'go' };
+  }
+  if (templateId.includes('ruby')) {
+    return { name: 'razorpay_server', extension: '.rb', language: 'ruby' };
+  }
+  if (templateId.includes('php')) {
+    return { name: 'razorpay', extension: '.php', language: 'php' };
+  }
+  if (templateId.includes('android')) {
+    return { name: 'PaymentActivity', extension: '.kt', language: 'kotlin' };
+  }
+  if (templateId.includes('ios')) {
+    return { name: 'PaymentViewController', extension: '.swift', language: 'swift' };
+  }
+  if (templateId.includes('flutter')) {
+    return { name: 'payment_page', extension: '.dart', language: 'dart' };
+  }
+  return { name: 'razorpay', extension: '.ts', language: 'typescript' };
 }
 
 async function handleSnippetGenerate(): Promise<void> {

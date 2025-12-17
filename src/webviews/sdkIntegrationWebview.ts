@@ -1,8 +1,6 @@
 import * as vscode from 'vscode';
 import type { Logger } from '../utils/logger';
-import { ProjectDetector } from '../utils/projectDetector';
-import { SDKInstaller } from '../utils/sdkInstaller';
-import { getSDKTemplate } from '../snippets/sdkTemplates';
+import { sdkSnippetTemplates } from '../snippets/sdkTemplates';
 
 export class SDKIntegrationWebviewProvider {
   private static currentPanel: vscode.WebviewPanel | undefined = undefined;
@@ -10,10 +8,9 @@ export class SDKIntegrationWebviewProvider {
   constructor(
     private context: vscode.ExtensionContext,
     private logger: Logger,
-    private sdkInstaller: SDKInstaller,
   ) {}
 
-  public async show(): Promise<void> {
+  public show(): void {
     if (SDKIntegrationWebviewProvider.currentPanel) {
       SDKIntegrationWebviewProvider.currentPanel.reveal();
       return;
@@ -31,27 +28,27 @@ export class SDKIntegrationWebviewProvider {
 
     panel.webview.html = this.getWebviewContent(panel.webview);
 
-    // Detect project on load
-    const projectInfo = await ProjectDetector.detectProject();
+    // Send available templates
+    const templates = sdkSnippetTemplates.map(template => ({
+      id: template.id,
+      name: template.name,
+      description: template.description,
+      prefix: template.prefix,
+      category: template.id.includes('checkout') ? 'frontend' : 'backend',
+    }));
+
     panel.webview.postMessage({
-      command: 'projectDetected',
-      projectInfo,
+      command: 'templates',
+      templates,
+      hasActiveEditor: !!vscode.window.activeTextEditor,
+      fileName: vscode.window.activeTextEditor?.document.fileName || null,
     });
 
     panel.webview.onDidReceiveMessage(
       async (message) => {
         switch (message.command) {
-          case 'detectProject':
-            await this.handleDetectProject(panel.webview);
-            break;
-          case 'getSDKTemplate':
-            await this.handleGetSDKTemplate(panel.webview, message.projectType);
-            break;
-          case 'installSDK':
-            await this.handleInstallSDK(message.projectType, message.rootPath);
-            break;
-          case 'insertCode':
-            await this.handleInsertCode(message.code);
+          case 'insertTemplate':
+            await this.handleInsertTemplate(message.templateId);
             break;
         }
       },
@@ -68,81 +65,48 @@ export class SDKIntegrationWebviewProvider {
     );
 
     SDKIntegrationWebviewProvider.currentPanel = panel;
+
+    // Update when active editor changes
+    this.context.subscriptions.push(
+      vscode.window.onDidChangeActiveTextEditor(() => {
+        if (SDKIntegrationWebviewProvider.currentPanel) {
+          SDKIntegrationWebviewProvider.currentPanel.webview.postMessage({
+            command: 'editorChanged',
+            hasActiveEditor: !!vscode.window.activeTextEditor,
+            fileName: vscode.window.activeTextEditor?.document.fileName || null,
+          });
+        }
+      }),
+    );
   }
 
-  private async handleDetectProject(webview: vscode.Webview): Promise<void> {
-    try {
-      const projectInfo = await ProjectDetector.detectProject();
-      webview.postMessage({
-        command: 'projectDetected',
-        projectInfo,
-      });
-      
-      // Automatically load SDK template
-      if (projectInfo.type !== 'unknown') {
-        await this.handleGetSDKTemplate(webview, projectInfo.type);
-      }
-    } catch (error) {
-      this.logger.error('Failed to detect project', error as Error);
-      webview.postMessage({
-        command: 'error',
-        message: 'Failed to detect project type',
-      });
-    }
-  }
-
-  private async handleGetSDKTemplate(webview: vscode.Webview, projectType: string): Promise<void> {
-    try {
-      const template = getSDKTemplate(projectType as any);
-      webview.postMessage({
-        command: 'sdkTemplate',
-        template,
-      });
-    } catch (error) {
-      this.logger.error('Failed to get SDK template', error as Error);
-      webview.postMessage({
-        command: 'error',
-        message: 'Failed to load SDK template',
-      });
-    }
-  }
-
-  private async handleInstallSDK(projectType: string, rootPath: string): Promise<void> {
-    try {
-      const success = await this.sdkInstaller.installSDK(projectType as any, rootPath);
-      if (SDKIntegrationWebviewProvider.currentPanel) {
-        SDKIntegrationWebviewProvider.currentPanel.webview.postMessage({
-          command: 'sdkInstallResult',
-          success,
-        });
-      }
-    } catch (error) {
-      this.logger.error('Failed to install SDK', error as Error);
-      if (SDKIntegrationWebviewProvider.currentPanel) {
-        SDKIntegrationWebviewProvider.currentPanel.webview.postMessage({
-          command: 'sdkInstallResult',
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error',
-        });
-      }
-    }
-  }
-
-  private async handleInsertCode(code: string): Promise<void> {
+  private async handleInsertTemplate(templateId: string): Promise<void> {
     try {
       const editor = vscode.window.activeTextEditor;
+      
       if (!editor) {
-        vscode.window.showWarningMessage('Please open a file first to insert the code.');
+        vscode.window.showWarningMessage('Please open a file first to insert the SDK code.');
         return;
       }
 
+      const template = sdkSnippetTemplates.find(t => t.id === templateId);
+      
+      if (!template) {
+        vscode.window.showErrorMessage('Template not found.');
+        return;
+      }
+
+      // Insert the code as a snippet at cursor position
+      const code = template.body.join('\n');
       const snippet = new vscode.SnippetString(code);
       const position = editor.selection.active;
       await editor.insertSnippet(snippet, position);
-      vscode.window.showInformationMessage('SDK integration code inserted successfully!');
+      
+      vscode.window.showInformationMessage(`${template.name} code inserted successfully!`);
+      this.logger.info(`SDK template ${templateId} inserted`);
     } catch (error) {
-      this.logger.error('Failed to insert code', error as Error);
-      vscode.window.showErrorMessage('Failed to insert code. Check output channel for details.');
+      this.logger.error('Failed to insert SDK template', error as Error);
+      vscode.window.showErrorMessage('Failed to insert SDK code. Check output channel for details.');
     }
   }
 
@@ -161,282 +125,198 @@ export class SDKIntegrationWebviewProvider {
             background-color: var(--vscode-editor-background);
         }
         .container {
-            max-width: 1200px;
+            max-width: 1000px;
             margin: 0 auto;
         }
         h1 {
             color: var(--vscode-textLink-foreground);
-            margin-bottom: 20px;
-        }
-        .project-info {
-            padding: 15px;
-            margin-bottom: 20px;
-            border-radius: 4px;
-            background-color: var(--vscode-textBlockQuote-background);
-            border-left: 4px solid var(--vscode-textLink-foreground);
-        }
-        .project-info h3 {
-            margin-top: 0;
             margin-bottom: 10px;
         }
-        .project-type {
-            font-size: 18px;
+        .subtitle {
+            color: var(--vscode-descriptionForeground);
+            margin-bottom: 20px;
+        }
+        .file-info {
+            margin-bottom: 20px;
+            padding: 12px 15px;
+            background-color: var(--vscode-textBlockQuote-background);
+            border-radius: 4px;
+            border-left: 4px solid var(--vscode-textLink-foreground);
+        }
+        .file-info .label {
             font-weight: bold;
             color: var(--vscode-textLink-foreground);
         }
-        .sdk-status {
-            margin-top: 10px;
-            padding: 8px;
-            border-radius: 4px;
-            display: inline-block;
+        .file-info .path {
+            font-family: var(--vscode-editor-font-family);
+            margin-top: 5px;
+            word-break: break-all;
         }
-        .sdk-status.installed {
-            background-color: var(--vscode-testing-iconPassed);
-            color: white;
-        }
-        .sdk-status.not-installed {
-            background-color: var(--vscode-testing-iconFailed);
-            color: white;
-        }
-        .actions {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-        button {
-            padding: 10px 20px;
-            background-color: var(--vscode-button-background);
-            color: var(--vscode-button-foreground);
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-        button:hover {
-            background-color: var(--vscode-button-hoverBackground);
-        }
-        button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-        .code-container {
-            margin-top: 20px;
-        }
-        .code-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-        .code-header h3 {
-            margin: 0;
-        }
-        pre {
-            background-color: var(--vscode-textCodeBlock-background);
+        .no-file-warning {
+            background-color: var(--vscode-inputValidation-warningBackground);
+            border: 1px solid var(--vscode-inputValidation-warningBorder);
             padding: 15px;
             border-radius: 4px;
-            overflow-x: auto;
-            border: 1px solid var(--vscode-input-border);
+            margin-bottom: 20px;
         }
-        code {
-            font-family: var(--vscode-editor-font-family);
-            font-size: 13px;
-            line-height: 1.5;
-        }
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: var(--vscode-descriptionForeground);
-        }
-        .unknown-project {
-            padding: 20px;
-            background-color: var(--vscode-input-background);
-            border-radius: 4px;
-            border: 1px solid var(--vscode-input-border);
-        }
-        .install-command {
-            background-color: var(--vscode-textCodeBlock-background);
-            padding: 10px;
-            border-radius: 4px;
+        .templates-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
             margin-top: 10px;
+        }
+        .template-card {
+            border: 1px solid var(--vscode-input-border);
+            border-radius: 4px;
+            padding: 15px;
+            background-color: var(--vscode-input-background);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .template-card:hover {
+            border-color: var(--vscode-textLink-foreground);
+            background-color: var(--vscode-list-hoverBackground);
+        }
+        .template-card:active {
+            transform: scale(0.98);
+        }
+        .template-name {
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: var(--vscode-textLink-foreground);
+        }
+        .template-description {
+            font-size: 13px;
+            color: var(--vscode-descriptionForeground);
+            margin-bottom: 10px;
+        }
+        .template-prefix {
+            font-size: 11px;
             font-family: var(--vscode-editor-font-family);
+            background-color: var(--vscode-textCodeBlock-background);
+            padding: 3px 6px;
+            border-radius: 3px;
+            color: var(--vscode-textPreformat-foreground);
+        }
+        .insert-hint {
+            font-size: 11px;
+            color: var(--vscode-descriptionForeground);
+            margin-top: 10px;
+            font-style: italic;
+        }
+        .category-title {
+            font-size: 14px;
+            font-weight: bold;
+            color: var(--vscode-descriptionForeground);
+            margin-top: 25px;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .category-title:first-of-type {
+            margin-top: 0;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>🔌 Razorpay SDK Integration</h1>
-        <div id="loading" class="loading">Detecting project type...</div>
+        <p class="subtitle">Click any template to insert the code at your cursor position</p>
         
-        <div id="projectInfo" style="display: none;">
-            <div class="project-info">
-                <h3>Detected Project</h3>
-                <div class="project-type" id="projectType">-</div>
-                <div style="margin-top: 10px;">
-                    <strong>Root Path:</strong> <span id="rootPath">-</span>
-                </div>
-                <div style="margin-top: 10px;">
-                    <strong>SDK Status:</strong>
-                    <span id="sdkStatus" class="sdk-status">-</span>
-                </div>
-            </div>
-            
-            <div class="actions">
-                <button id="detectBtn" onclick="detectProject()">🔄 Re-detect Project</button>
-                <button id="installBtn" onclick="installSDK()" disabled>📦 Install SDK</button>
-                <button id="insertBtn" onclick="insertCode()" disabled>📝 Insert Code</button>
-            </div>
-            
-            <div id="codeContainer" class="code-container" style="display: none;">
-                <div class="code-header">
-                    <h3>Integration Code</h3>
-                    <button onclick="copyCode()">📋 Copy</button>
-                </div>
-                <pre><code id="codeContent"></code></pre>
-                <div id="installCommand" class="install-command" style="display: none;">
-                    <strong>Installation Command:</strong>
-                    <code id="installCommandText"></code>
-                </div>
-            </div>
+        <div id="fileInfo" class="file-info" style="display: none;">
+            <div class="label">📄 Target File</div>
+            <div class="path" id="filePath">-</div>
         </div>
         
-        <div id="unknownProject" class="unknown-project" style="display: none;">
-            <h3>Project Type Not Detected</h3>
-            <p>We couldn't automatically detect your project type. Please ensure your project has the required configuration files:</p>
-            <ul>
-                <li><strong>Web:</strong> HTML/JS files</li>
-                <li><strong>React:</strong> package.json with react dependency</li>
-                <li><strong>Next.js:</strong> package.json with next dependency</li>
-                <li><strong>Android:</strong> build.gradle or AndroidManifest.xml</li>
-                <li><strong>iOS:</strong> Podfile or .xcodeproj</li>
-                <li><strong>Flutter:</strong> pubspec.yaml</li>
-                <li><strong>Node.js:</strong> package.json</li>
-                <li><strong>Python:</strong> requirements.txt or setup.py</li>
-                <li><strong>PHP:</strong> composer.json</li>
-                <li><strong>Ruby:</strong> Gemfile</li>
-                <li><strong>Java:</strong> pom.xml or build.gradle</li>
-                <li><strong>Go:</strong> go.mod</li>
-            </ul>
-            <button onclick="detectProject()">Try Again</button>
+        <div id="noFileWarning" class="no-file-warning" style="display: none;">
+            ⚠️ <strong>No file open.</strong> Please open a file where you want to add the SDK integration code.
         </div>
+        
+        <div class="category-title">Frontend Checkout</div>
+        <div id="frontendTemplates" class="templates-grid"></div>
+        
+        <div class="category-title">Backend Server</div>
+        <div id="backendTemplates" class="templates-grid"></div>
     </div>
 
     <script>
         const vscode = acquireVsCodeApi();
-        let currentProjectInfo = null;
-        let currentCode = '';
 
-        function detectProject() {
-            document.getElementById('loading').style.display = 'block';
-            document.getElementById('projectInfo').style.display = 'none';
-            document.getElementById('unknownProject').style.display = 'none';
-            vscode.postMessage({ command: 'detectProject' });
-        }
-
-        function installSDK() {
-            if (!currentProjectInfo) return;
-            vscode.postMessage({
-                command: 'installSDK',
-                projectType: currentProjectInfo.type,
-                rootPath: currentProjectInfo.rootPath
-            });
-        }
-
-        function insertCode() {
-            if (!currentCode) return;
-            vscode.postMessage({
-                command: 'insertCode',
-                code: currentCode
-            });
-        }
-
-        function copyCode() {
-            if (!currentCode) return;
-            navigator.clipboard.writeText(currentCode).then(() => {
-                vscode.postMessage({
-                    command: 'showMessage',
-                    message: 'Code copied to clipboard!'
-                });
-            });
-        }
-
-        function updateUI(projectInfo) {
-            currentProjectInfo = projectInfo;
-            document.getElementById('loading').style.display = 'none';
+        function renderTemplates(templates, hasActiveEditor, fileName) {
+            // Update file info
+            const fileInfo = document.getElementById('fileInfo');
+            const noFileWarning = document.getElementById('noFileWarning');
+            const filePath = document.getElementById('filePath');
             
-            if (projectInfo.type === 'unknown') {
-                document.getElementById('unknownProject').style.display = 'block';
-                return;
-            }
-
-            document.getElementById('projectInfo').style.display = 'block';
-            document.getElementById('projectType').textContent = projectInfo.type.toUpperCase();
-            document.getElementById('rootPath').textContent = projectInfo.rootPath;
-            
-            const sdkStatus = document.getElementById('sdkStatus');
-            if (projectInfo.hasSDK) {
-                sdkStatus.textContent = '✓ SDK Installed';
-                sdkStatus.className = 'sdk-status installed';
-                document.getElementById('installBtn').disabled = true;
+            if (hasActiveEditor && fileName) {
+                fileInfo.style.display = 'block';
+                noFileWarning.style.display = 'none';
+                const shortPath = fileName.split('/').pop() || fileName.split('\\\\').pop();
+                filePath.textContent = shortPath;
             } else {
-                sdkStatus.textContent = '✗ SDK Not Installed';
-                sdkStatus.className = 'sdk-status not-installed';
-                document.getElementById('installBtn').disabled = false;
+                fileInfo.style.display = 'none';
+                noFileWarning.style.display = 'block';
             }
 
-            // Load SDK template
-            fetchSDKTemplate(projectInfo.type);
+            // Categorize templates
+            const frontend = templates.filter(t => t.category === 'frontend');
+            const backend = templates.filter(t => t.category === 'backend');
+
+            document.getElementById('frontendTemplates').innerHTML = renderCategory(frontend);
+            document.getElementById('backendTemplates').innerHTML = renderCategory(backend);
         }
 
-        function fetchSDKTemplate(projectType) {
-            // Request template from extension
+        function renderCategory(templates) {
+            if (templates.length === 0) {
+                return '<p style="color: var(--vscode-descriptionForeground);">No templates available</p>';
+            }
+            return templates.map(t => \`
+                <div class="template-card" onclick="insertTemplate('\${t.id}')">
+                    <div class="template-name">\${t.name}</div>
+                    <div class="template-description">\${t.description}</div>
+                    <div class="template-prefix">\${t.prefix}</div>
+                    <div class="insert-hint">Click to insert at cursor</div>
+                </div>
+            \`).join('');
+        }
+
+        function insertTemplate(templateId) {
             vscode.postMessage({
-                command: 'getSDKTemplate',
-                projectType: projectType
+                command: 'insertTemplate',
+                templateId: templateId
             });
-        }
-
-        function displayCode(template) {
-            currentCode = template.code;
-            document.getElementById('codeContent').textContent = template.code;
-            document.getElementById('codeContainer').style.display = 'block';
-            document.getElementById('insertBtn').disabled = false;
-            
-            if (template.installCommand) {
-                document.getElementById('installCommandText').textContent = template.installCommand;
-                document.getElementById('installCommand').style.display = 'block';
-            }
         }
 
         // Listen for messages from extension
         window.addEventListener('message', event => {
             const message = event.data;
             switch (message.command) {
-                case 'projectDetected':
-                    updateUI(message.projectInfo);
+                case 'templates':
+                    renderTemplates(message.templates, message.hasActiveEditor, message.fileName);
                     break;
-                case 'sdkTemplate':
-                    displayCode(message.template);
-                    break;
-                case 'sdkInstallResult':
-                    if (message.success) {
-                        alert('SDK installation started! Check the terminal for progress.');
-                        detectProject(); // Re-detect to update status
-                    } else {
-                        alert('SDK installation failed: ' + (message.error || 'Unknown error'));
-                    }
-                    break;
-                case 'error':
-                    alert('Error: ' + message.message);
+                case 'editorChanged':
+                    updateFileInfo(message.hasActiveEditor, message.fileName);
                     break;
             }
         });
 
-        // Initial detection
-        detectProject();
+        function updateFileInfo(hasActiveEditor, fileName) {
+            const fileInfo = document.getElementById('fileInfo');
+            const noFileWarning = document.getElementById('noFileWarning');
+            const filePath = document.getElementById('filePath');
+            
+            if (hasActiveEditor && fileName) {
+                fileInfo.style.display = 'block';
+                noFileWarning.style.display = 'none';
+                const shortPath = fileName.split('/').pop() || fileName.split('\\\\').pop();
+                filePath.textContent = shortPath;
+            } else {
+                fileInfo.style.display = 'none';
+                noFileWarning.style.display = 'block';
+            }
+        }
     </script>
 </body>
 </html>`;
   }
 }
-
