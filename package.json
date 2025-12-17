@@ -31,25 +31,35 @@
       "razorpay": [
         {
           "id": "razorpayAssistantChat",
-          "name": "AI Assistant",
-          "type": "webview"
+          "name": "Assistant",
+          "type": "webview",
+          "when": "true",
+          "visibility": "visible"
         },
         {
           "id": "razorpayMCPChat",
-          "name": "MCP Tools",
-          "type": "webview"
+          "name": "MCP Server",
+          "type": "webview",
+          "when": "true",
+          "visibility": "collapsed"
         },
         {
           "id": "razorpaySnippets",
-          "name": "Code Snippets"
+          "name": "Code Snippets",
+          "when": "true",
+          "visibility": "collapsed"
         },
         {
           "id": "razorpayEvents",
-          "name": "Trigger Events"
+          "name": "Trigger Events",
+          "when": "true",
+          "visibility": "collapsed"
         },
         {
           "id": "razorpaySDKIntegration",
-          "name": "SDK Integration"
+          "name": "SDK Integration",
+          "when": "true",
+          "visibility": "collapsed"
         }
       ]
     },
@@ -92,6 +102,11 @@
     ],
     "menus": {
       "view/title": [
+        {
+          "command": "razorpay.openAssistant",
+          "when": "view == razorpayAssistant",
+          "group": "navigation"
+        },
         {
           "command": "razorpay.openSnippets",
           "when": "view == razorpaySnippets",
