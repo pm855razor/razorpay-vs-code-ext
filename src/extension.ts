@@ -56,6 +56,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     eventsTreeProvider = new EventsTreeProvider();
     sdkIntegrationTreeProvider = new SDKIntegrationTreeProvider();
 
+    // Initialize webview providers
+    assistantWebview = new AssistantWebviewProvider(context, logger);
+    snippetsWebview = new SnippetsWebviewProvider(context, logger, snippetGenerator);
+    eventsWebview = new EventsWebviewProvider(context, logger, razorpayService);
+
     // Register tree views
     vscode.window.createTreeView('razorpayAssistant', {
       treeDataProvider: assistantTreeProvider,
@@ -70,11 +75,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.window.createTreeView('razorpaySDKIntegration', {
       treeDataProvider: sdkIntegrationTreeProvider,
     });
-
-    // Initialize webview providers
-    assistantWebview = new AssistantWebviewProvider(context, logger);
-    snippetsWebview = new SnippetsWebviewProvider(context, logger, snippetGenerator);
-    eventsWebview = new EventsWebviewProvider(context, logger, razorpayService);
 
     // Register hover provider for API documentation
     const hoverProvider = new RazorpayHoverProvider();
@@ -133,8 +133,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 }
 
 function registerCommands(context: vscode.ExtensionContext): void {
-  const openAssistantCommand = vscode.commands.registerCommand('razorpay.openAssistant', () => {
-    assistantWebview.show();
+  const openAssistantCommand = vscode.commands.registerCommand('razorpay.openAssistant', (agent?: string) => {
+    assistantWebview.show(agent);
   });
   context.subscriptions.push(openAssistantCommand);
 

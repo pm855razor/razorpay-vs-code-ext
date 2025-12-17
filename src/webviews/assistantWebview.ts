@@ -8,6 +8,20 @@ import type { Logger } from '../utils/logger';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type LLMType = ChatOpenAI | ChatGoogleGenerativeAI | any;
 
+interface SmartronHistoryItem {
+  question: string;
+  answer: string;
+}
+
+interface SmartronResponse {
+  answer?: string;
+  sources?: Array<{
+    title?: string;
+    url?: string;
+  }>;
+  error?: string;
+}
+
 interface MCPTool {
   name: string;
   description: string;
@@ -30,35 +44,47 @@ interface MCPResponse {
 }
 
 export class AssistantWebviewProvider {
-  private static currentPanel: vscode.WebviewPanel | undefined = undefined;
+  // Separate panels for each agent
+  private static razorpayPanel: vscode.WebviewPanel | undefined = undefined;
+  private static mcpPanel: vscode.WebviewPanel | undefined = undefined;
   private mcpRequestId = 0;
+  private smartronHistory: SmartronHistoryItem[] = [];
 
   constructor(private context: vscode.ExtensionContext, private logger: Logger) { }
 
-  public show(): void {
-    if (AssistantWebviewProvider.currentPanel) {
-      AssistantWebviewProvider.currentPanel.reveal();
+  public show(agent?: string): void {
+    const selectedAgent = agent || 'razorpay';
+
+    if (selectedAgent === 'mcp') {
+      this.showMCPPanel();
+    } else {
+      this.showRazorpayPanel();
+    }
+  }
+
+  private showRazorpayPanel(): void {
+    if (AssistantWebviewProvider.razorpayPanel) {
+      AssistantWebviewProvider.razorpayPanel.reveal(vscode.ViewColumn.Two);
       return;
     }
 
     const panel = vscode.window.createWebviewPanel(
-      'razorpayAssistant',
-      'Razorpay Assistant',
-      vscode.ViewColumn.One,
+      'razorpayAI',
+      '🤖 Razorpay AI',
+      vscode.ViewColumn.Two,
       {
         enableScripts: true,
         retainContextWhenHidden: true,
+        localResourceRoots: [this.context.extensionUri],
       },
     );
 
-    panel.webview.html = this.getWebviewContent(panel.webview);
+    panel.webview.html = this.getRazorpayChatContent(panel.webview);
 
     panel.webview.onDidReceiveMessage(
       async (message) => {
-        switch (message.command) {
-          case 'askQuestion':
-            await this.handleQuestion(message.text, message.agent || 'razorpay');
-            break;
+        if (message.command === 'askQuestion') {
+          await this.handleQuestion(message.text, 'razorpay', panel);
         }
       },
       null,
@@ -66,24 +92,58 @@ export class AssistantWebviewProvider {
     );
 
     panel.onDidDispose(() => {
-      AssistantWebviewProvider.currentPanel = undefined;
+      AssistantWebviewProvider.razorpayPanel = undefined;
     });
 
-    AssistantWebviewProvider.currentPanel = panel;
+    AssistantWebviewProvider.razorpayPanel = panel;
   }
 
-  private async handleQuestion(question: string, agent: string): Promise<void> {
+  private showMCPPanel(): void {
+    if (AssistantWebviewProvider.mcpPanel) {
+      AssistantWebviewProvider.mcpPanel.reveal(vscode.ViewColumn.Two);
+      return;
+    }
+
+    const panel = vscode.window.createWebviewPanel(
+      'razorpayMCP',
+      '⚡ Razorpay MCP',
+      vscode.ViewColumn.Two,
+      {
+        enableScripts: true,
+        retainContextWhenHidden: true,
+        localResourceRoots: [this.context.extensionUri],
+      },
+    );
+
+    panel.webview.html = this.getMCPChatContent(panel.webview);
+
+    panel.webview.onDidReceiveMessage(
+      async (message) => {
+        if (message.command === 'askQuestion') {
+          await this.handleQuestion(message.text, 'mcp', panel);
+        }
+      },
+      null,
+      this.context.subscriptions,
+    );
+
+    panel.onDidDispose(() => {
+      AssistantWebviewProvider.mcpPanel = undefined;
+    });
+
+    AssistantWebviewProvider.mcpPanel = panel;
+  }
+
+  private async handleQuestion(question: string, agent: string, panel: vscode.WebviewPanel): Promise<void> {
     this.logger.info(`Assistant question (${agent}): ${question}`);
 
-    if (AssistantWebviewProvider.currentPanel) {
-      // Show loading state
-      AssistantWebviewProvider.currentPanel.webview.postMessage({
-        command: 'response',
-        text: agent === 'mcp' ? 'Connecting to Razorpay MCP Server...' : 'Thinking...',
-        agent: agent,
-        isLoading: true,
-      });
-    }
+    // Show loading state
+    panel.webview.postMessage({
+      command: 'response',
+      text: agent === 'mcp' ? 'Connecting to Razorpay MCP Server...' : 'Thinking...',
+      agent: agent,
+      isLoading: true,
+    });
 
     try {
       let response: string;
@@ -98,26 +158,22 @@ export class AssistantWebviewProvider {
         response = 'Unknown agent selected.';
       }
 
-      if (AssistantWebviewProvider.currentPanel) {
-        AssistantWebviewProvider.currentPanel.webview.postMessage({
-          command: 'response',
-          text: response,
-          agent: agent,
-          isLoading: false,
-        });
-      }
+      panel.webview.postMessage({
+        command: 'response',
+        text: response,
+        agent: agent,
+        isLoading: false,
+      });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       this.logger.error('Failed to handle question', error as Error);
 
-      if (AssistantWebviewProvider.currentPanel) {
-        AssistantWebviewProvider.currentPanel.webview.postMessage({
-          command: 'response',
-          text: `Error: ${errorMessage}`,
-          agent: agent,
-          isLoading: false,
-        });
-      }
+      panel.webview.postMessage({
+        command: 'response',
+        text: `Error: ${errorMessage}`,
+        agent: agent,
+        isLoading: false,
+      });
     }
   }
 
@@ -820,6 +876,90 @@ Learn more: https://razorpay.com/docs/mcp-server/`;
     return `\`\`\`json\n${JSON.stringify(result, null, 2)}\n\`\`\``;
   }
 
+  /**
+   * Call Razorpay Smartron API (RAY) for intelligent documentation assistance
+   * This API doesn't require any authentication
+   */
+  private async callSmartronAPI(question: string): Promise<SmartronResponse> {
+    const requestBody = JSON.stringify({
+      question: question,
+      products: ['docs'],
+      history: this.smartronHistory.slice(-5) // Keep last 5 conversation items for context
+    });
+
+    return new Promise((resolve, reject) => {
+      const options = {
+        hostname: 'smartron.razorpay.com',
+        port: 443,
+        path: '/query',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Accept-Language': 'en-GB,en-US;q=0.9,en;q=0.8',
+          'Cache-Control': 'no-cache',
+          'Origin': 'https://razorpay.com',
+          'Referer': 'https://razorpay.com/',
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+          'Content-Length': Buffer.byteLength(requestBody)
+        }
+      };
+
+      const req = https.request(options, (res) => {
+        let data = '';
+        
+        res.on('data', (chunk) => {
+          data += chunk;
+        });
+
+        res.on('end', () => {
+          try {
+            const response = JSON.parse(data);
+            resolve(response);
+          } catch (error) {
+            this.logger.error('Failed to parse Smartron response', error as Error);
+            reject(new Error(`Invalid response from Smartron API: ${data.substring(0, 200)}`));
+          }
+        });
+      });
+
+      req.on('error', (error) => {
+        reject(new Error(`Smartron API connection failed: ${error.message}`));
+      });
+
+      req.setTimeout(30000, () => {
+        req.destroy();
+        reject(new Error('Smartron API request timed out'));
+      });
+
+      req.write(requestBody);
+      req.end();
+    });
+  }
+
+  /**
+   * Format Smartron API response with sources
+   */
+  private formatSmartronResponse(response: SmartronResponse): string {
+    if (response.error) {
+      return `⚠️ **Error:** ${response.error}`;
+    }
+
+    let result = response.answer || 'No response received.';
+
+    // Add sources if available
+    if (response.sources && response.sources.length > 0) {
+      result += '\n\n---\n📚 **Sources:**\n';
+      for (const source of response.sources) {
+        if (source.url) {
+          result += `- [${source.title || 'Razorpay Docs'}](${source.url})\n`;
+        }
+      }
+    }
+
+    return result;
+  }
+
   private createLLM(): LLMType | null {
     const config = vscode.workspace.getConfiguration('razorpay');
     
@@ -849,12 +989,36 @@ Learn more: https://razorpay.com/docs/mcp-server/`;
   }
 
   private async handleRazorpayQuestion(question: string): Promise<string> {
+    // First, try to use Razorpay Smartron API (RAY) - no API key needed
+    try {
+      this.logger.info('Calling Razorpay Smartron API...');
+      const smartronResponse = await this.callSmartronAPI(question);
+      
+      if (smartronResponse.answer) {
+        // Store in history for context in future questions
+        this.smartronHistory.push({
+          question: question,
+          answer: smartronResponse.answer
+        });
+        
+        // Keep history limited to last 10 items
+        if (this.smartronHistory.length > 10) {
+          this.smartronHistory = this.smartronHistory.slice(-10);
+        }
+        
+        return this.formatSmartronResponse(smartronResponse);
+      }
+    } catch (error) {
+      this.logger.warn(`Smartron API call failed, falling back to LLM: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
+    // Fallback to LangChain LLM if Smartron fails
     const llm = this.createLLM();
     
     if (llm) {
       try {
-      // Use LangChain LLM for AI-powered responses
-      return await this.callAI(llm, question);
+        // Use LangChain LLM for AI-powered responses
+        return await this.callAI(llm, question);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         this.logger.error('AI call failed', error as Error);
@@ -1001,306 +1165,256 @@ What specific Razorpay topic would you like help with?`;
     return 'No response received';
   }
 
-  private getWebviewContent(_webview: vscode.Webview): string {
-    return `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Razorpay Assistant</title>
-    <style>
+  private getBaseStyles(): string {
+    return `
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: var(--vscode-font-family);
-            padding: 20px;
             color: var(--vscode-foreground);
             background-color: var(--vscode-editor-background);
-        }
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-        }
-        h1 {
-            color: var(--vscode-textLink-foreground);
-            margin-bottom: 20px;
-        }
-        .agent-selector {
+            height: 100vh;
             display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-            padding: 10px;
-            background-color: var(--vscode-input-background);
-            border-radius: 4px;
-            border: 1px solid var(--vscode-input-border);
+            flex-direction: column;
         }
-        .agent-option {
+        .header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--vscode-panel-border);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .header-icon { font-size: 28px; }
+        .header-info { flex: 1; }
+        .header-title { font-weight: 600; font-size: 15px; margin-bottom: 2px; }
+        .header-desc { font-size: 12px; color: var(--vscode-descriptionForeground); }
+        .chat-container {
             flex: 1;
-            padding: 12px;
-            border: 2px solid transparent;
-            border-radius: 6px;
-            background-color: var(--vscode-editor-background);
-            color: var(--vscode-foreground);
-            cursor: pointer;
-            text-align: center;
-            transition: all 0.2s;
-        }
-        .agent-option:hover {
-            background-color: var(--vscode-list-hoverBackground);
-        }
-        .agent-option.selected {
-            border-color: var(--vscode-textLink-foreground);
-            background-color: var(--vscode-list-activeSelectionBackground);
-        }
-        .agent-option .agent-name {
-            font-weight: 600;
-            margin-bottom: 4px;
-            font-size: 14px;
-        }
-        .agent-option .agent-desc {
-            font-size: 11px;
-            color: var(--vscode-descriptionForeground);
-        }
-        .agent-option .agent-icon {
-            font-size: 24px;
-            margin-bottom: 6px;
-        }
-        .input-container {
             display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .chat-history {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px 20px;
+        }
+        .message {
+            margin-bottom: 12px;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            line-height: 1.5;
+            word-wrap: break-word;
+        }
+        .user-message {
+            background: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+            margin-left: 20%;
+            border-bottom-right-radius: 4px;
+        }
+        .assistant-message {
+            background: var(--vscode-textBlockQuote-background);
+            margin-right: 20%;
+            border-bottom-left-radius: 4px;
+        }
+        .input-area {
+            padding: 12px 20px 16px;
+            border-top: 1px solid var(--vscode-panel-border);
+            display: flex;
+            gap: 8px;
         }
         input {
             flex: 1;
-            padding: 10px;
+            padding: 10px 14px;
             border: 1px solid var(--vscode-input-border);
-            background-color: var(--vscode-input-background);
+            background: var(--vscode-input-background);
             color: var(--vscode-input-foreground);
-            border-radius: 4px;
-            font-size: 14px;
-        }
-        button {
-            padding: 10px 20px;
-            background-color: var(--vscode-button-background);
-            color: var(--vscode-button-foreground);
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: 500;
-        }
-        button:hover { background-color: var(--vscode-button-hoverBackground); }
-        .chat-history { 
-            max-height: 400px; 
-            overflow-y: auto; 
-            margin-top: 20px;
-            padding: 10px;
-            border: 1px solid var(--vscode-input-border);
-            border-radius: 4px;
-        }
-        .message { 
-            margin-bottom: 15px; 
-            padding: 12px; 
-            border-radius: 8px;
-            line-height: 1.5;
-        }
-        .user-message { 
-            background-color: var(--vscode-input-background); 
-            text-align: right;
-            margin-left: 20%;
-        }
-        .assistant-message { 
-            background-color: var(--vscode-textBlockQuote-background);
-            margin-right: 20%;
-        }
-        .info-box {
-            background-color: var(--vscode-textBlockQuote-background);
-            border-left: 3px solid var(--vscode-textLink-foreground);
-            padding: 12px;
-            margin-bottom: 20px;
-            border-radius: 0 4px 4px 0;
+            border-radius: 6px;
             font-size: 13px;
         }
+        input:focus { outline: 1px solid var(--vscode-focusBorder); }
+        button {
+            padding: 10px 18px;
+            background: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        button:hover { background: var(--vscode-button-hoverBackground); }
         pre {
-            background-color: var(--vscode-textCodeBlock-background);
+            background: var(--vscode-textCodeBlock-background);
             padding: 10px;
-            border-radius: 4px;
+            border-radius: 6px;
             overflow-x: auto;
-            margin: 10px 0;
+            margin: 8px 0;
+            font-size: 12px;
         }
-        code {
-            font-family: var(--vscode-editor-font-family);
+        code { font-family: var(--vscode-editor-font-family); }
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--vscode-descriptionForeground);
         }
-        .badge {
-            display: inline-block;
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-size: 10px;
-            font-weight: 600;
-            margin-left: 4px;
-        }
-        .badge-cloud {
-            background-color: #4CAF50;
-            color: white;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>🚀 Razorpay Assistant</h1>
-        
-        <div class="info-box">
-            <strong>Choose your assistant:</strong><br>
-           
-        </div>
-        
-        <div class="agent-selector">
-            <div class="agent-option" id="agent-razorpay" onclick="selectAgent('razorpay')">
-                <div class="agent-icon">🤖</div>
-                <div class="agent-name">@razorpay</div>
-            </div>
-            <div class="agent-option" id="agent-mcp" onclick="selectAgent('mcp')">
-                <div class="agent-icon">⚡</div>
-                <div class="agent-name">@mcp</div>
-            </div>
-        </div>
-        
-        <div class="input-container">
-            <input type="text" id="questionInput" placeholder="Ask a question..." />
-            <button onclick="askQuestion()">Send</button>
-        </div>
-        
-        <div class="chat-history" id="chatHistory"></div>
-    </div>
+        .empty-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
+        .empty-text { font-size: 13px; }
+    `;
+  }
 
-    <script>
+  private getBaseScript(): string {
+    return `
         const vscode = acquireVsCodeApi();
         const questionInput = document.getElementById('questionInput');
         const chatHistory = document.getElementById('chatHistory');
-        let selectedAgent = 'razorpay';
-
-        // Initialize with Razorpay agent selected
-        selectAgent('razorpay');
-
-        function selectAgent(agent) {
-            selectedAgent = agent;
-            
-            // Update UI
-            document.querySelectorAll('.agent-option').forEach(option => {
-                option.classList.remove('selected');
-            });
-            document.getElementById('agent-' + agent).classList.add('selected');
-            
-            // Update placeholder
-            if (agent === 'razorpay') {
-                questionInput.placeholder = 'Ask about Razorpay integration, APIs, webhooks...';
-            } else {
-                questionInput.placeholder = 'Try: "list tools", "create order for 500", "list payments"...';
-            }
-        }
 
         function askQuestion() {
             const question = questionInput.value.trim();
             if (!question) return;
 
-            // Add user message to chat with agent indicator
-            const agentLabel = selectedAgent === 'razorpay' ? '@razorpay' : '@mcp';
-            addMessage(question, 'user', agentLabel);
+            const empty = chatHistory.querySelector('.empty-state');
+            if (empty) empty.remove();
+
+            addMessage(question, 'user');
             questionInput.value = '';
 
-            // Send to extension
             vscode.postMessage({
                 command: 'askQuestion',
-                text: question,
-                agent: selectedAgent
+                text: question
             });
         }
 
-        function addMessage(text, type, agentLabel = null) {
+        function addMessage(text, type) {
             const messageDiv = document.createElement('div');
             messageDiv.className = 'message ' + (type === 'user' ? 'user-message' : 'assistant-message');
             
-            if (type === 'user' && agentLabel) {
-                const labelSpan = document.createElement('span');
-                labelSpan.style.cssText = 'font-size: 11px; color: var(--vscode-textLink-foreground); margin-right: 8px; font-weight: 600;';
-                labelSpan.textContent = agentLabel;
-                messageDiv.appendChild(labelSpan);
-            }
-            
-            const textNode = document.createElement('span');
             if (type === 'assistant') {
-                // Support markdown-like formatting for code blocks
-                textNode.innerHTML = formatMessage(text);
+                messageDiv.innerHTML = formatMessage(text);
             } else {
-                textNode.textContent = text;
+                messageDiv.textContent = text;
             }
-            messageDiv.appendChild(textNode);
             
             chatHistory.appendChild(messageDiv);
             chatHistory.scrollTop = chatHistory.scrollHeight;
         }
 
         function formatMessage(text) {
-            // Simple markdown formatting
-            let formatted = text;
-            
+            if (!text) return '';
+            let formatted = String(text);
             // Code blocks
-            formatted = formatted.replace(/\`\`\`(\\w+)?\\n([\\s\\S]*?)\`\`\`/g, function(match, lang, code) {
-                return '<pre><code>' + escapeHtml(code.trim()) + '</code></pre>';
-            });
-            
+            formatted = formatted.replace(/\`\`\`([\\w]*)?\\n([\\s\\S]*?)\`\`\`/g, '<pre><code>$2</code></pre>');
             // Inline code
-            formatted = formatted.replace(/\`([^\`]+)\`/g, '<code style="background-color: var(--vscode-textCodeBlock-background); padding: 2px 6px; border-radius: 3px;">$1</code>');
-            
-            // Bold text
+            formatted = formatted.replace(/\`([^\`]+)\`/g, '<code style="background:var(--vscode-textCodeBlock-background);padding:2px 4px;border-radius:3px;">$1</code>');
+            // Bold
             formatted = formatted.replace(/\\*\\*([^*]+)\\*\\*/g, '<strong>$1</strong>');
-            
-            // Headers
-            formatted = formatted.replace(/^### (.+)$/gm, '<h4 style="margin: 10px 0 5px 0;">$1</h4>');
-            formatted = formatted.replace(/^## (.+)$/gm, '<h3 style="margin: 15px 0 8px 0;">$1</h3>');
-            
             // Links
-            formatted = formatted.replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, '<a href="$2" style="color: var(--vscode-textLink-foreground);">$1</a>');
-            
+            formatted = formatted.replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, '<a href="$2" style="color:var(--vscode-textLink-foreground);" target="_blank">$1</a>');
             // Line breaks
             formatted = formatted.replace(/\\n/g, '<br>');
-            
             return formatted;
         }
 
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
         questionInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                askQuestion();
-            }
+            if (e.key === 'Enter') askQuestion();
         });
 
-        // Listen for messages from extension
         window.addEventListener('message', event => {
             const message = event.data;
+            console.log('Received message:', message);
             if (message.command === 'response') {
+                const lastMsg = chatHistory.lastElementChild;
                 if (message.isLoading) {
-                    // Update last message if loading
-                    const lastMessage = chatHistory.lastElementChild;
-                    if (lastMessage && lastMessage.classList.contains('assistant-message')) {
-                        lastMessage.querySelector('span').textContent = message.text;
+                    if (lastMsg && lastMsg.classList.contains('assistant-message')) {
+                        lastMsg.textContent = message.text;
                     } else {
                         addMessage(message.text, 'assistant');
                     }
                 } else {
-                    // Replace loading message or add new one
-                    const lastMessage = chatHistory.lastElementChild;
-                    if (lastMessage && (lastMessage.textContent.includes('Thinking...') || lastMessage.textContent.includes('Connecting to'))) {
-                        lastMessage.querySelector('span').innerHTML = formatMessage(message.text);
+                    if (lastMsg && (lastMsg.textContent.includes('Thinking...') || lastMsg.textContent.includes('Connecting'))) {
+                        lastMsg.innerHTML = formatMessage(message.text);
                     } else {
-                addMessage(message.text, 'assistant');
+                        addMessage(message.text, 'assistant');
                     }
                 }
             }
         });
-    </script>
+
+        // Focus input on load
+        questionInput.focus();
+    `;
+  }
+
+  private getRazorpayChatContent(_webview: vscode.Webview): string {
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Razorpay AI</title>
+    <style>${this.getBaseStyles()}</style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-icon">🤖</div>
+        <div class="header-info">
+            <div class="header-title">@razorpay</div>
+            <div class="header-desc">AI Docs Assistant</div>
+        </div>
+    </div>
+    
+    <div class="chat-container">
+        <div class="chat-history" id="chatHistory">
+            <div class="empty-state">
+                <div class="empty-icon">💬</div>
+                <div class="empty-text">Ask about Razorpay APIs, webhooks, and integration</div>
+            </div>
+        </div>
+        
+        <div class="input-area">
+            <input type="text" id="questionInput" placeholder="Ask about Razorpay..." />
+            <button onclick="askQuestion()">Send</button>
+        </div>
+    </div>
+
+    <script>${this.getBaseScript()}</script>
+</body>
+</html>`;
+  }
+
+  private getMCPChatContent(_webview: vscode.Webview): string {
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Razorpay MCP</title>
+    <style>${this.getBaseStyles()}</style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-icon">⚡</div>
+        <div class="header-info">
+            <div class="header-title">@mcp</div>
+            <div class="header-desc">API Operations</div>
+        </div>
+    </div>
+    
+    <div class="chat-container">
+        <div class="chat-history" id="chatHistory">
+            <div class="empty-state">
+                <div class="empty-icon">🔧</div>
+                <div class="empty-text">Create orders, payments, refunds via Razorpay API</div>
+            </div>
+        </div>
+        
+        <div class="input-area">
+            <input type="text" id="questionInput" placeholder="Try: list tools, create order..." />
+            <button onclick="askQuestion()">Send</button>
+        </div>
+    </div>
+
+    <script>${this.getBaseScript()}</script>
 </body>
 </html>`;
   }
