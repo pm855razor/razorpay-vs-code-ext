@@ -30,15 +30,8 @@
     "views": {
       "razorpay": [
         {
-          "id": "razorpayAssistantChat",
-          "name": "AI Assistant",
-          "type": "webview",
-          "when": "true"
-        },
-        {
-          "id": "razorpayMCPChat",
-          "name": "MCP Tools",
-          "type": "webview",
+          "id": "razorpayAssistant",
+          "name": "Assistant",
           "when": "true"
         },
         {
